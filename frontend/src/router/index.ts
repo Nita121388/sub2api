@@ -154,6 +154,30 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/request-logs',
+    name: 'RequestLogs',
+    component: () => import('@/views/user/RequestLogsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Request Logs',
+      titleKey: 'requestLogs.title',
+      descriptionKey: 'requestLogs.description'
+    }
+  },
+  {
+    path: '/request-logs/:id',
+    name: 'RequestLogDetail',
+    component: () => import('@/views/user/RequestLogDetailView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Request Log Detail',
+      titleKey: 'requestLogs.detailTitle',
+      descriptionKey: 'requestLogs.detailDescription'
+    }
+  },
+  {
     path: '/redeem',
     name: 'Redeem',
     component: () => import('@/views/user/RedeemView.vue'),

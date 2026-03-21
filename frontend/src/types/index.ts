@@ -1026,6 +1026,29 @@ export interface UsageLog {
   subscription?: UserSubscription
 }
 
+export interface RequestLog {
+  id: number
+  user_id: number
+  api_key_id: number
+  request_id?: string | null
+  model: string
+  inbound_endpoint?: string | null
+  upstream_endpoint?: string | null
+  method?: string | null
+  status_code?: number | null
+  error_code?: string | null
+  error_message?: string | null
+  input_tokens: number
+  output_tokens: number
+  total_cost: number
+  stream: boolean
+  duration_ms?: number | null
+  first_token_ms?: number | null
+  user_agent?: string | null
+  ip_address?: string | null
+  created_at: string
+}
+
 export interface UsageLogAccountSummary {
   id: number
   name: string
@@ -1349,6 +1372,17 @@ export interface UsageQueryParams {
   billing_type?: number | null
   start_date?: string
   end_date?: string
+}
+
+export interface RequestLogQueryParams {
+  page?: number
+  page_size?: number
+  api_key_id?: number
+  model?: string
+  status_code?: number
+  start_date?: string
+  end_date?: string
+  timezone?: string
 }
 
 // ==================== Account Usage Statistics ====================
