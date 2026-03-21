@@ -16,31 +16,31 @@ var (
 )
 
 type RequestLog struct {
-	ID int64
+	ID int64 `json:"id"`
 
-	UserID   int64
-	APIKeyID int64
+	UserID   int64 `json:"user_id"`
+	APIKeyID int64 `json:"api_key_id"`
 
-	RequestID        *string
-	Model            string
-	InboundEndpoint  *string
-	UpstreamEndpoint *string
-	Method           *string
-	StatusCode       *int
-	ErrorCode        *string
-	ErrorMessage     *string
+	RequestID        *string `json:"request_id,omitempty"`
+	Model            string  `json:"model"`
+	InboundEndpoint  *string `json:"inbound_endpoint,omitempty"`
+	UpstreamEndpoint *string `json:"upstream_endpoint,omitempty"`
+	Method           *string `json:"method,omitempty"`
+	StatusCode       *int    `json:"status_code,omitempty"`
+	ErrorCode        *string `json:"error_code,omitempty"`
+	ErrorMessage     *string `json:"error_message,omitempty"`
 
-	InputTokens  int
-	OutputTokens int
-	TotalCost    float64
+	InputTokens  int     `json:"input_tokens"`
+	OutputTokens int     `json:"output_tokens"`
+	TotalCost    float64 `json:"total_cost"`
 
-	Stream       bool
-	DurationMs   *int
-	FirstTokenMs *int
-	UserAgent    *string
-	IPAddress    *string
+	Stream       bool    `json:"stream"`
+	DurationMs   *int    `json:"duration_ms,omitempty"`
+	FirstTokenMs *int    `json:"first_token_ms,omitempty"`
+	UserAgent    *string `json:"user_agent,omitempty"`
+	IPAddress    *string `json:"ip_address,omitempty"`
 
-	CreatedAt time.Time
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type RequestLogFilters struct {
