@@ -415,6 +415,7 @@ func (h *SoraGatewayHandler) ChatCompletions(c *gin.Context) {
 				UpstreamEndpoint:   upstreamEndpoint,
 				UserAgent:          userAgent,
 				IPAddress:          clientIP,
+				RequestBody:        body,
 				RequestPayloadHash: requestPayloadHash,
 			}); err != nil {
 				logger.L().With(

@@ -26,6 +26,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/requestlog"
+	"github.com/Wei-Shaw/sub2api/ent/requestlogpayload"
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
@@ -60,6 +61,7 @@ const (
 	TypeProxy                   = "Proxy"
 	TypeRedeemCode              = "RedeemCode"
 	TypeRequestLog              = "RequestLog"
+	TypeRequestLogPayload       = "RequestLogPayload"
 	TypeSecuritySecret          = "SecuritySecret"
 	TypeSetting                 = "Setting"
 	TypeUsageCleanupTask        = "UsageCleanupTask"
@@ -16345,6 +16347,8 @@ type RequestLogMutation struct {
 	cleareduser       bool
 	api_key           *int64
 	clearedapi_key    bool
+	payload           *int64
+	clearedpayload    bool
 	done              bool
 	oldValue          func(context.Context) (*RequestLog, error)
 	predicates        []predicate.RequestLog
@@ -17452,6 +17456,45 @@ func (m *RequestLogMutation) ResetAPIKey() {
 	m.clearedapi_key = false
 }
 
+// SetPayloadID sets the "payload" edge to the RequestLogPayload entity by id.
+func (m *RequestLogMutation) SetPayloadID(id int64) {
+	m.payload = &id
+}
+
+// ClearPayload clears the "payload" edge to the RequestLogPayload entity.
+func (m *RequestLogMutation) ClearPayload() {
+	m.clearedpayload = true
+}
+
+// PayloadCleared reports if the "payload" edge to the RequestLogPayload entity was cleared.
+func (m *RequestLogMutation) PayloadCleared() bool {
+	return m.clearedpayload
+}
+
+// PayloadID returns the "payload" edge ID in the mutation.
+func (m *RequestLogMutation) PayloadID() (id int64, exists bool) {
+	if m.payload != nil {
+		return *m.payload, true
+	}
+	return
+}
+
+// PayloadIDs returns the "payload" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// PayloadID instead. It exists only for internal usage by the builders.
+func (m *RequestLogMutation) PayloadIDs() (ids []int64) {
+	if id := m.payload; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetPayload resets all changes to the "payload" edge.
+func (m *RequestLogMutation) ResetPayload() {
+	m.payload = nil
+	m.clearedpayload = false
+}
+
 // Where appends a list predicates to the RequestLogMutation builder.
 func (m *RequestLogMutation) Where(ps ...predicate.RequestLog) {
 	m.predicates = append(m.predicates, ps...)
@@ -18035,12 +18078,15 @@ func (m *RequestLogMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *RequestLogMutation) AddedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.user != nil {
 		edges = append(edges, requestlog.EdgeUser)
 	}
 	if m.api_key != nil {
 		edges = append(edges, requestlog.EdgeAPIKey)
+	}
+	if m.payload != nil {
+		edges = append(edges, requestlog.EdgePayload)
 	}
 	return edges
 }
@@ -18057,13 +18103,17 @@ func (m *RequestLogMutation) AddedIDs(name string) []ent.Value {
 		if id := m.api_key; id != nil {
 			return []ent.Value{*id}
 		}
+	case requestlog.EdgePayload:
+		if id := m.payload; id != nil {
+			return []ent.Value{*id}
+		}
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *RequestLogMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	return edges
 }
 
@@ -18075,12 +18125,15 @@ func (m *RequestLogMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *RequestLogMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.cleareduser {
 		edges = append(edges, requestlog.EdgeUser)
 	}
 	if m.clearedapi_key {
 		edges = append(edges, requestlog.EdgeAPIKey)
+	}
+	if m.clearedpayload {
+		edges = append(edges, requestlog.EdgePayload)
 	}
 	return edges
 }
@@ -18093,6 +18146,8 @@ func (m *RequestLogMutation) EdgeCleared(name string) bool {
 		return m.cleareduser
 	case requestlog.EdgeAPIKey:
 		return m.clearedapi_key
+	case requestlog.EdgePayload:
+		return m.clearedpayload
 	}
 	return false
 }
@@ -18106,6 +18161,9 @@ func (m *RequestLogMutation) ClearEdge(name string) error {
 		return nil
 	case requestlog.EdgeAPIKey:
 		m.ClearAPIKey()
+		return nil
+	case requestlog.EdgePayload:
+		m.ClearPayload()
 		return nil
 	}
 	return fmt.Errorf("unknown RequestLog unique edge %s", name)
@@ -18121,8 +18179,1065 @@ func (m *RequestLogMutation) ResetEdge(name string) error {
 	case requestlog.EdgeAPIKey:
 		m.ResetAPIKey()
 		return nil
+	case requestlog.EdgePayload:
+		m.ResetPayload()
+		return nil
 	}
 	return fmt.Errorf("unknown RequestLog edge %s", name)
+}
+
+// RequestLogPayloadMutation represents an operation that mutates the RequestLogPayload nodes in the graph.
+type RequestLogPayloadMutation struct {
+	config
+	op                      Op
+	typ                     string
+	id                      *int64
+	request_body            *[]byte
+	request_body_encoding   *string
+	request_body_bytes      *int
+	addrequest_body_bytes   *int
+	request_body_truncated  *bool
+	response_body           *[]byte
+	response_body_encoding  *string
+	response_body_bytes     *int
+	addresponse_body_bytes  *int
+	response_body_truncated *bool
+	created_at              *time.Time
+	clearedFields           map[string]struct{}
+	request_log             *int64
+	clearedrequest_log      bool
+	done                    bool
+	oldValue                func(context.Context) (*RequestLogPayload, error)
+	predicates              []predicate.RequestLogPayload
+}
+
+var _ ent.Mutation = (*RequestLogPayloadMutation)(nil)
+
+// requestlogpayloadOption allows management of the mutation configuration using functional options.
+type requestlogpayloadOption func(*RequestLogPayloadMutation)
+
+// newRequestLogPayloadMutation creates new mutation for the RequestLogPayload entity.
+func newRequestLogPayloadMutation(c config, op Op, opts ...requestlogpayloadOption) *RequestLogPayloadMutation {
+	m := &RequestLogPayloadMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeRequestLogPayload,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withRequestLogPayloadID sets the ID field of the mutation.
+func withRequestLogPayloadID(id int64) requestlogpayloadOption {
+	return func(m *RequestLogPayloadMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *RequestLogPayload
+		)
+		m.oldValue = func(ctx context.Context) (*RequestLogPayload, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().RequestLogPayload.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withRequestLogPayload sets the old RequestLogPayload of the mutation.
+func withRequestLogPayload(node *RequestLogPayload) requestlogpayloadOption {
+	return func(m *RequestLogPayloadMutation) {
+		m.oldValue = func(context.Context) (*RequestLogPayload, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m RequestLogPayloadMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m RequestLogPayloadMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *RequestLogPayloadMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *RequestLogPayloadMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().RequestLogPayload.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetRequestLogID sets the "request_log_id" field.
+func (m *RequestLogPayloadMutation) SetRequestLogID(i int64) {
+	m.request_log = &i
+}
+
+// RequestLogID returns the value of the "request_log_id" field in the mutation.
+func (m *RequestLogPayloadMutation) RequestLogID() (r int64, exists bool) {
+	v := m.request_log
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequestLogID returns the old "request_log_id" field's value of the RequestLogPayload entity.
+// If the RequestLogPayload object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RequestLogPayloadMutation) OldRequestLogID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequestLogID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequestLogID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequestLogID: %w", err)
+	}
+	return oldValue.RequestLogID, nil
+}
+
+// ResetRequestLogID resets all changes to the "request_log_id" field.
+func (m *RequestLogPayloadMutation) ResetRequestLogID() {
+	m.request_log = nil
+}
+
+// SetRequestBody sets the "request_body" field.
+func (m *RequestLogPayloadMutation) SetRequestBody(b []byte) {
+	m.request_body = &b
+}
+
+// RequestBody returns the value of the "request_body" field in the mutation.
+func (m *RequestLogPayloadMutation) RequestBody() (r []byte, exists bool) {
+	v := m.request_body
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequestBody returns the old "request_body" field's value of the RequestLogPayload entity.
+// If the RequestLogPayload object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RequestLogPayloadMutation) OldRequestBody(ctx context.Context) (v []byte, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequestBody is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequestBody requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequestBody: %w", err)
+	}
+	return oldValue.RequestBody, nil
+}
+
+// ClearRequestBody clears the value of the "request_body" field.
+func (m *RequestLogPayloadMutation) ClearRequestBody() {
+	m.request_body = nil
+	m.clearedFields[requestlogpayload.FieldRequestBody] = struct{}{}
+}
+
+// RequestBodyCleared returns if the "request_body" field was cleared in this mutation.
+func (m *RequestLogPayloadMutation) RequestBodyCleared() bool {
+	_, ok := m.clearedFields[requestlogpayload.FieldRequestBody]
+	return ok
+}
+
+// ResetRequestBody resets all changes to the "request_body" field.
+func (m *RequestLogPayloadMutation) ResetRequestBody() {
+	m.request_body = nil
+	delete(m.clearedFields, requestlogpayload.FieldRequestBody)
+}
+
+// SetRequestBodyEncoding sets the "request_body_encoding" field.
+func (m *RequestLogPayloadMutation) SetRequestBodyEncoding(s string) {
+	m.request_body_encoding = &s
+}
+
+// RequestBodyEncoding returns the value of the "request_body_encoding" field in the mutation.
+func (m *RequestLogPayloadMutation) RequestBodyEncoding() (r string, exists bool) {
+	v := m.request_body_encoding
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequestBodyEncoding returns the old "request_body_encoding" field's value of the RequestLogPayload entity.
+// If the RequestLogPayload object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RequestLogPayloadMutation) OldRequestBodyEncoding(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequestBodyEncoding is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequestBodyEncoding requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequestBodyEncoding: %w", err)
+	}
+	return oldValue.RequestBodyEncoding, nil
+}
+
+// ClearRequestBodyEncoding clears the value of the "request_body_encoding" field.
+func (m *RequestLogPayloadMutation) ClearRequestBodyEncoding() {
+	m.request_body_encoding = nil
+	m.clearedFields[requestlogpayload.FieldRequestBodyEncoding] = struct{}{}
+}
+
+// RequestBodyEncodingCleared returns if the "request_body_encoding" field was cleared in this mutation.
+func (m *RequestLogPayloadMutation) RequestBodyEncodingCleared() bool {
+	_, ok := m.clearedFields[requestlogpayload.FieldRequestBodyEncoding]
+	return ok
+}
+
+// ResetRequestBodyEncoding resets all changes to the "request_body_encoding" field.
+func (m *RequestLogPayloadMutation) ResetRequestBodyEncoding() {
+	m.request_body_encoding = nil
+	delete(m.clearedFields, requestlogpayload.FieldRequestBodyEncoding)
+}
+
+// SetRequestBodyBytes sets the "request_body_bytes" field.
+func (m *RequestLogPayloadMutation) SetRequestBodyBytes(i int) {
+	m.request_body_bytes = &i
+	m.addrequest_body_bytes = nil
+}
+
+// RequestBodyBytes returns the value of the "request_body_bytes" field in the mutation.
+func (m *RequestLogPayloadMutation) RequestBodyBytes() (r int, exists bool) {
+	v := m.request_body_bytes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequestBodyBytes returns the old "request_body_bytes" field's value of the RequestLogPayload entity.
+// If the RequestLogPayload object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RequestLogPayloadMutation) OldRequestBodyBytes(ctx context.Context) (v *int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequestBodyBytes is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequestBodyBytes requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequestBodyBytes: %w", err)
+	}
+	return oldValue.RequestBodyBytes, nil
+}
+
+// AddRequestBodyBytes adds i to the "request_body_bytes" field.
+func (m *RequestLogPayloadMutation) AddRequestBodyBytes(i int) {
+	if m.addrequest_body_bytes != nil {
+		*m.addrequest_body_bytes += i
+	} else {
+		m.addrequest_body_bytes = &i
+	}
+}
+
+// AddedRequestBodyBytes returns the value that was added to the "request_body_bytes" field in this mutation.
+func (m *RequestLogPayloadMutation) AddedRequestBodyBytes() (r int, exists bool) {
+	v := m.addrequest_body_bytes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearRequestBodyBytes clears the value of the "request_body_bytes" field.
+func (m *RequestLogPayloadMutation) ClearRequestBodyBytes() {
+	m.request_body_bytes = nil
+	m.addrequest_body_bytes = nil
+	m.clearedFields[requestlogpayload.FieldRequestBodyBytes] = struct{}{}
+}
+
+// RequestBodyBytesCleared returns if the "request_body_bytes" field was cleared in this mutation.
+func (m *RequestLogPayloadMutation) RequestBodyBytesCleared() bool {
+	_, ok := m.clearedFields[requestlogpayload.FieldRequestBodyBytes]
+	return ok
+}
+
+// ResetRequestBodyBytes resets all changes to the "request_body_bytes" field.
+func (m *RequestLogPayloadMutation) ResetRequestBodyBytes() {
+	m.request_body_bytes = nil
+	m.addrequest_body_bytes = nil
+	delete(m.clearedFields, requestlogpayload.FieldRequestBodyBytes)
+}
+
+// SetRequestBodyTruncated sets the "request_body_truncated" field.
+func (m *RequestLogPayloadMutation) SetRequestBodyTruncated(b bool) {
+	m.request_body_truncated = &b
+}
+
+// RequestBodyTruncated returns the value of the "request_body_truncated" field in the mutation.
+func (m *RequestLogPayloadMutation) RequestBodyTruncated() (r bool, exists bool) {
+	v := m.request_body_truncated
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequestBodyTruncated returns the old "request_body_truncated" field's value of the RequestLogPayload entity.
+// If the RequestLogPayload object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RequestLogPayloadMutation) OldRequestBodyTruncated(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequestBodyTruncated is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequestBodyTruncated requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequestBodyTruncated: %w", err)
+	}
+	return oldValue.RequestBodyTruncated, nil
+}
+
+// ResetRequestBodyTruncated resets all changes to the "request_body_truncated" field.
+func (m *RequestLogPayloadMutation) ResetRequestBodyTruncated() {
+	m.request_body_truncated = nil
+}
+
+// SetResponseBody sets the "response_body" field.
+func (m *RequestLogPayloadMutation) SetResponseBody(b []byte) {
+	m.response_body = &b
+}
+
+// ResponseBody returns the value of the "response_body" field in the mutation.
+func (m *RequestLogPayloadMutation) ResponseBody() (r []byte, exists bool) {
+	v := m.response_body
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldResponseBody returns the old "response_body" field's value of the RequestLogPayload entity.
+// If the RequestLogPayload object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RequestLogPayloadMutation) OldResponseBody(ctx context.Context) (v []byte, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldResponseBody is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldResponseBody requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldResponseBody: %w", err)
+	}
+	return oldValue.ResponseBody, nil
+}
+
+// ClearResponseBody clears the value of the "response_body" field.
+func (m *RequestLogPayloadMutation) ClearResponseBody() {
+	m.response_body = nil
+	m.clearedFields[requestlogpayload.FieldResponseBody] = struct{}{}
+}
+
+// ResponseBodyCleared returns if the "response_body" field was cleared in this mutation.
+func (m *RequestLogPayloadMutation) ResponseBodyCleared() bool {
+	_, ok := m.clearedFields[requestlogpayload.FieldResponseBody]
+	return ok
+}
+
+// ResetResponseBody resets all changes to the "response_body" field.
+func (m *RequestLogPayloadMutation) ResetResponseBody() {
+	m.response_body = nil
+	delete(m.clearedFields, requestlogpayload.FieldResponseBody)
+}
+
+// SetResponseBodyEncoding sets the "response_body_encoding" field.
+func (m *RequestLogPayloadMutation) SetResponseBodyEncoding(s string) {
+	m.response_body_encoding = &s
+}
+
+// ResponseBodyEncoding returns the value of the "response_body_encoding" field in the mutation.
+func (m *RequestLogPayloadMutation) ResponseBodyEncoding() (r string, exists bool) {
+	v := m.response_body_encoding
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldResponseBodyEncoding returns the old "response_body_encoding" field's value of the RequestLogPayload entity.
+// If the RequestLogPayload object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RequestLogPayloadMutation) OldResponseBodyEncoding(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldResponseBodyEncoding is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldResponseBodyEncoding requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldResponseBodyEncoding: %w", err)
+	}
+	return oldValue.ResponseBodyEncoding, nil
+}
+
+// ClearResponseBodyEncoding clears the value of the "response_body_encoding" field.
+func (m *RequestLogPayloadMutation) ClearResponseBodyEncoding() {
+	m.response_body_encoding = nil
+	m.clearedFields[requestlogpayload.FieldResponseBodyEncoding] = struct{}{}
+}
+
+// ResponseBodyEncodingCleared returns if the "response_body_encoding" field was cleared in this mutation.
+func (m *RequestLogPayloadMutation) ResponseBodyEncodingCleared() bool {
+	_, ok := m.clearedFields[requestlogpayload.FieldResponseBodyEncoding]
+	return ok
+}
+
+// ResetResponseBodyEncoding resets all changes to the "response_body_encoding" field.
+func (m *RequestLogPayloadMutation) ResetResponseBodyEncoding() {
+	m.response_body_encoding = nil
+	delete(m.clearedFields, requestlogpayload.FieldResponseBodyEncoding)
+}
+
+// SetResponseBodyBytes sets the "response_body_bytes" field.
+func (m *RequestLogPayloadMutation) SetResponseBodyBytes(i int) {
+	m.response_body_bytes = &i
+	m.addresponse_body_bytes = nil
+}
+
+// ResponseBodyBytes returns the value of the "response_body_bytes" field in the mutation.
+func (m *RequestLogPayloadMutation) ResponseBodyBytes() (r int, exists bool) {
+	v := m.response_body_bytes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldResponseBodyBytes returns the old "response_body_bytes" field's value of the RequestLogPayload entity.
+// If the RequestLogPayload object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RequestLogPayloadMutation) OldResponseBodyBytes(ctx context.Context) (v *int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldResponseBodyBytes is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldResponseBodyBytes requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldResponseBodyBytes: %w", err)
+	}
+	return oldValue.ResponseBodyBytes, nil
+}
+
+// AddResponseBodyBytes adds i to the "response_body_bytes" field.
+func (m *RequestLogPayloadMutation) AddResponseBodyBytes(i int) {
+	if m.addresponse_body_bytes != nil {
+		*m.addresponse_body_bytes += i
+	} else {
+		m.addresponse_body_bytes = &i
+	}
+}
+
+// AddedResponseBodyBytes returns the value that was added to the "response_body_bytes" field in this mutation.
+func (m *RequestLogPayloadMutation) AddedResponseBodyBytes() (r int, exists bool) {
+	v := m.addresponse_body_bytes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearResponseBodyBytes clears the value of the "response_body_bytes" field.
+func (m *RequestLogPayloadMutation) ClearResponseBodyBytes() {
+	m.response_body_bytes = nil
+	m.addresponse_body_bytes = nil
+	m.clearedFields[requestlogpayload.FieldResponseBodyBytes] = struct{}{}
+}
+
+// ResponseBodyBytesCleared returns if the "response_body_bytes" field was cleared in this mutation.
+func (m *RequestLogPayloadMutation) ResponseBodyBytesCleared() bool {
+	_, ok := m.clearedFields[requestlogpayload.FieldResponseBodyBytes]
+	return ok
+}
+
+// ResetResponseBodyBytes resets all changes to the "response_body_bytes" field.
+func (m *RequestLogPayloadMutation) ResetResponseBodyBytes() {
+	m.response_body_bytes = nil
+	m.addresponse_body_bytes = nil
+	delete(m.clearedFields, requestlogpayload.FieldResponseBodyBytes)
+}
+
+// SetResponseBodyTruncated sets the "response_body_truncated" field.
+func (m *RequestLogPayloadMutation) SetResponseBodyTruncated(b bool) {
+	m.response_body_truncated = &b
+}
+
+// ResponseBodyTruncated returns the value of the "response_body_truncated" field in the mutation.
+func (m *RequestLogPayloadMutation) ResponseBodyTruncated() (r bool, exists bool) {
+	v := m.response_body_truncated
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldResponseBodyTruncated returns the old "response_body_truncated" field's value of the RequestLogPayload entity.
+// If the RequestLogPayload object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RequestLogPayloadMutation) OldResponseBodyTruncated(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldResponseBodyTruncated is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldResponseBodyTruncated requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldResponseBodyTruncated: %w", err)
+	}
+	return oldValue.ResponseBodyTruncated, nil
+}
+
+// ResetResponseBodyTruncated resets all changes to the "response_body_truncated" field.
+func (m *RequestLogPayloadMutation) ResetResponseBodyTruncated() {
+	m.response_body_truncated = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *RequestLogPayloadMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *RequestLogPayloadMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the RequestLogPayload entity.
+// If the RequestLogPayload object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RequestLogPayloadMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *RequestLogPayloadMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// ClearRequestLog clears the "request_log" edge to the RequestLog entity.
+func (m *RequestLogPayloadMutation) ClearRequestLog() {
+	m.clearedrequest_log = true
+	m.clearedFields[requestlogpayload.FieldRequestLogID] = struct{}{}
+}
+
+// RequestLogCleared reports if the "request_log" edge to the RequestLog entity was cleared.
+func (m *RequestLogPayloadMutation) RequestLogCleared() bool {
+	return m.clearedrequest_log
+}
+
+// RequestLogIDs returns the "request_log" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// RequestLogID instead. It exists only for internal usage by the builders.
+func (m *RequestLogPayloadMutation) RequestLogIDs() (ids []int64) {
+	if id := m.request_log; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetRequestLog resets all changes to the "request_log" edge.
+func (m *RequestLogPayloadMutation) ResetRequestLog() {
+	m.request_log = nil
+	m.clearedrequest_log = false
+}
+
+// Where appends a list predicates to the RequestLogPayloadMutation builder.
+func (m *RequestLogPayloadMutation) Where(ps ...predicate.RequestLogPayload) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the RequestLogPayloadMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *RequestLogPayloadMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.RequestLogPayload, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *RequestLogPayloadMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *RequestLogPayloadMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (RequestLogPayload).
+func (m *RequestLogPayloadMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *RequestLogPayloadMutation) Fields() []string {
+	fields := make([]string, 0, 10)
+	if m.request_log != nil {
+		fields = append(fields, requestlogpayload.FieldRequestLogID)
+	}
+	if m.request_body != nil {
+		fields = append(fields, requestlogpayload.FieldRequestBody)
+	}
+	if m.request_body_encoding != nil {
+		fields = append(fields, requestlogpayload.FieldRequestBodyEncoding)
+	}
+	if m.request_body_bytes != nil {
+		fields = append(fields, requestlogpayload.FieldRequestBodyBytes)
+	}
+	if m.request_body_truncated != nil {
+		fields = append(fields, requestlogpayload.FieldRequestBodyTruncated)
+	}
+	if m.response_body != nil {
+		fields = append(fields, requestlogpayload.FieldResponseBody)
+	}
+	if m.response_body_encoding != nil {
+		fields = append(fields, requestlogpayload.FieldResponseBodyEncoding)
+	}
+	if m.response_body_bytes != nil {
+		fields = append(fields, requestlogpayload.FieldResponseBodyBytes)
+	}
+	if m.response_body_truncated != nil {
+		fields = append(fields, requestlogpayload.FieldResponseBodyTruncated)
+	}
+	if m.created_at != nil {
+		fields = append(fields, requestlogpayload.FieldCreatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *RequestLogPayloadMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case requestlogpayload.FieldRequestLogID:
+		return m.RequestLogID()
+	case requestlogpayload.FieldRequestBody:
+		return m.RequestBody()
+	case requestlogpayload.FieldRequestBodyEncoding:
+		return m.RequestBodyEncoding()
+	case requestlogpayload.FieldRequestBodyBytes:
+		return m.RequestBodyBytes()
+	case requestlogpayload.FieldRequestBodyTruncated:
+		return m.RequestBodyTruncated()
+	case requestlogpayload.FieldResponseBody:
+		return m.ResponseBody()
+	case requestlogpayload.FieldResponseBodyEncoding:
+		return m.ResponseBodyEncoding()
+	case requestlogpayload.FieldResponseBodyBytes:
+		return m.ResponseBodyBytes()
+	case requestlogpayload.FieldResponseBodyTruncated:
+		return m.ResponseBodyTruncated()
+	case requestlogpayload.FieldCreatedAt:
+		return m.CreatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *RequestLogPayloadMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case requestlogpayload.FieldRequestLogID:
+		return m.OldRequestLogID(ctx)
+	case requestlogpayload.FieldRequestBody:
+		return m.OldRequestBody(ctx)
+	case requestlogpayload.FieldRequestBodyEncoding:
+		return m.OldRequestBodyEncoding(ctx)
+	case requestlogpayload.FieldRequestBodyBytes:
+		return m.OldRequestBodyBytes(ctx)
+	case requestlogpayload.FieldRequestBodyTruncated:
+		return m.OldRequestBodyTruncated(ctx)
+	case requestlogpayload.FieldResponseBody:
+		return m.OldResponseBody(ctx)
+	case requestlogpayload.FieldResponseBodyEncoding:
+		return m.OldResponseBodyEncoding(ctx)
+	case requestlogpayload.FieldResponseBodyBytes:
+		return m.OldResponseBodyBytes(ctx)
+	case requestlogpayload.FieldResponseBodyTruncated:
+		return m.OldResponseBodyTruncated(ctx)
+	case requestlogpayload.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown RequestLogPayload field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *RequestLogPayloadMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case requestlogpayload.FieldRequestLogID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequestLogID(v)
+		return nil
+	case requestlogpayload.FieldRequestBody:
+		v, ok := value.([]byte)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequestBody(v)
+		return nil
+	case requestlogpayload.FieldRequestBodyEncoding:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequestBodyEncoding(v)
+		return nil
+	case requestlogpayload.FieldRequestBodyBytes:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequestBodyBytes(v)
+		return nil
+	case requestlogpayload.FieldRequestBodyTruncated:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequestBodyTruncated(v)
+		return nil
+	case requestlogpayload.FieldResponseBody:
+		v, ok := value.([]byte)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetResponseBody(v)
+		return nil
+	case requestlogpayload.FieldResponseBodyEncoding:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetResponseBodyEncoding(v)
+		return nil
+	case requestlogpayload.FieldResponseBodyBytes:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetResponseBodyBytes(v)
+		return nil
+	case requestlogpayload.FieldResponseBodyTruncated:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetResponseBodyTruncated(v)
+		return nil
+	case requestlogpayload.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown RequestLogPayload field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *RequestLogPayloadMutation) AddedFields() []string {
+	var fields []string
+	if m.addrequest_body_bytes != nil {
+		fields = append(fields, requestlogpayload.FieldRequestBodyBytes)
+	}
+	if m.addresponse_body_bytes != nil {
+		fields = append(fields, requestlogpayload.FieldResponseBodyBytes)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *RequestLogPayloadMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case requestlogpayload.FieldRequestBodyBytes:
+		return m.AddedRequestBodyBytes()
+	case requestlogpayload.FieldResponseBodyBytes:
+		return m.AddedResponseBodyBytes()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *RequestLogPayloadMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case requestlogpayload.FieldRequestBodyBytes:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRequestBodyBytes(v)
+		return nil
+	case requestlogpayload.FieldResponseBodyBytes:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddResponseBodyBytes(v)
+		return nil
+	}
+	return fmt.Errorf("unknown RequestLogPayload numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *RequestLogPayloadMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(requestlogpayload.FieldRequestBody) {
+		fields = append(fields, requestlogpayload.FieldRequestBody)
+	}
+	if m.FieldCleared(requestlogpayload.FieldRequestBodyEncoding) {
+		fields = append(fields, requestlogpayload.FieldRequestBodyEncoding)
+	}
+	if m.FieldCleared(requestlogpayload.FieldRequestBodyBytes) {
+		fields = append(fields, requestlogpayload.FieldRequestBodyBytes)
+	}
+	if m.FieldCleared(requestlogpayload.FieldResponseBody) {
+		fields = append(fields, requestlogpayload.FieldResponseBody)
+	}
+	if m.FieldCleared(requestlogpayload.FieldResponseBodyEncoding) {
+		fields = append(fields, requestlogpayload.FieldResponseBodyEncoding)
+	}
+	if m.FieldCleared(requestlogpayload.FieldResponseBodyBytes) {
+		fields = append(fields, requestlogpayload.FieldResponseBodyBytes)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *RequestLogPayloadMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *RequestLogPayloadMutation) ClearField(name string) error {
+	switch name {
+	case requestlogpayload.FieldRequestBody:
+		m.ClearRequestBody()
+		return nil
+	case requestlogpayload.FieldRequestBodyEncoding:
+		m.ClearRequestBodyEncoding()
+		return nil
+	case requestlogpayload.FieldRequestBodyBytes:
+		m.ClearRequestBodyBytes()
+		return nil
+	case requestlogpayload.FieldResponseBody:
+		m.ClearResponseBody()
+		return nil
+	case requestlogpayload.FieldResponseBodyEncoding:
+		m.ClearResponseBodyEncoding()
+		return nil
+	case requestlogpayload.FieldResponseBodyBytes:
+		m.ClearResponseBodyBytes()
+		return nil
+	}
+	return fmt.Errorf("unknown RequestLogPayload nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *RequestLogPayloadMutation) ResetField(name string) error {
+	switch name {
+	case requestlogpayload.FieldRequestLogID:
+		m.ResetRequestLogID()
+		return nil
+	case requestlogpayload.FieldRequestBody:
+		m.ResetRequestBody()
+		return nil
+	case requestlogpayload.FieldRequestBodyEncoding:
+		m.ResetRequestBodyEncoding()
+		return nil
+	case requestlogpayload.FieldRequestBodyBytes:
+		m.ResetRequestBodyBytes()
+		return nil
+	case requestlogpayload.FieldRequestBodyTruncated:
+		m.ResetRequestBodyTruncated()
+		return nil
+	case requestlogpayload.FieldResponseBody:
+		m.ResetResponseBody()
+		return nil
+	case requestlogpayload.FieldResponseBodyEncoding:
+		m.ResetResponseBodyEncoding()
+		return nil
+	case requestlogpayload.FieldResponseBodyBytes:
+		m.ResetResponseBodyBytes()
+		return nil
+	case requestlogpayload.FieldResponseBodyTruncated:
+		m.ResetResponseBodyTruncated()
+		return nil
+	case requestlogpayload.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown RequestLogPayload field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *RequestLogPayloadMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.request_log != nil {
+		edges = append(edges, requestlogpayload.EdgeRequestLog)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *RequestLogPayloadMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case requestlogpayload.EdgeRequestLog:
+		if id := m.request_log; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *RequestLogPayloadMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *RequestLogPayloadMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *RequestLogPayloadMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.clearedrequest_log {
+		edges = append(edges, requestlogpayload.EdgeRequestLog)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *RequestLogPayloadMutation) EdgeCleared(name string) bool {
+	switch name {
+	case requestlogpayload.EdgeRequestLog:
+		return m.clearedrequest_log
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *RequestLogPayloadMutation) ClearEdge(name string) error {
+	switch name {
+	case requestlogpayload.EdgeRequestLog:
+		m.ClearRequestLog()
+		return nil
+	}
+	return fmt.Errorf("unknown RequestLogPayload unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *RequestLogPayloadMutation) ResetEdge(name string) error {
+	switch name {
+	case requestlogpayload.EdgeRequestLog:
+		m.ResetRequestLog()
+		return nil
+	}
+	return fmt.Errorf("unknown RequestLogPayload edge %s", name)
 }
 
 // SecuritySecretMutation represents an operation that mutates the SecuritySecret nodes in the graph.

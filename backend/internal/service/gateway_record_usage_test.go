@@ -116,6 +116,11 @@ func TestGatewayServiceRecordUsage_WritesRequestLogMetadata(t *testing.T) {
 	requestRepo := &openAIRequestLogRepoStub{}
 	svc := newGatewayRecordUsageServiceForTest(usageRepo, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{})
 	svc.requestLogRepo = requestRepo
+	svc.settingService = NewSettingService(&requestLogSettingRepoStub{
+		values: map[string]string{
+			SettingKeyRequestLogSettings: `{"capture_request_body":true,"capture_response_body":true,"max_request_body_bytes":4096,"max_response_body_bytes":4096,"retention_days":30}`,
+		},
+	}, nil)
 
 	err := svc.RecordUsage(context.Background(), &RecordUsageInput{
 		Result: &ForwardResult{
@@ -125,6 +130,7 @@ func TestGatewayServiceRecordUsage_WritesRequestLogMetadata(t *testing.T) {
 				OutputTokens: 6,
 			},
 			Model:        "claude-sonnet-4",
+			ResponseBody: []byte(`{"id":"msg_1","type":"message"}`),
 			Stream:       true,
 			Duration:     time.Second,
 			FirstTokenMs: func() *int { v := 120; return &v }(),
@@ -136,6 +142,7 @@ func TestGatewayServiceRecordUsage_WritesRequestLogMetadata(t *testing.T) {
 		UpstreamEndpoint: "/v1/messages",
 		UserAgent:        "claude-client",
 		IPAddress:        "10.0.0.1",
+		RequestBody:      []byte(`{"api_key":"secret","messages":[{"role":"user","content":"hi"}]}`),
 	})
 
 	require.NoError(t, err)
@@ -150,6 +157,12 @@ func TestGatewayServiceRecordUsage_WritesRequestLogMetadata(t *testing.T) {
 	require.Equal(t, 200, *requestRepo.lastLog.StatusCode)
 	require.NotNil(t, requestRepo.lastLog.IPAddress)
 	require.Equal(t, "10.0.0.1", *requestRepo.lastLog.IPAddress)
+	require.NotNil(t, requestRepo.lastLog.Payload)
+	require.NotNil(t, requestRepo.lastLog.Payload.RequestBody)
+	require.Contains(t, *requestRepo.lastLog.Payload.RequestBody, "[REDACTED]")
+	require.NotContains(t, *requestRepo.lastLog.Payload.RequestBody, "secret")
+	require.NotNil(t, requestRepo.lastLog.Payload.ResponseBody)
+	require.Contains(t, *requestRepo.lastLog.Payload.ResponseBody, `"id":"msg_1"`)
 }
 
 func TestGatewayServiceRecordUsage_BillingFingerprintIncludesRequestPayloadHash(t *testing.T) {

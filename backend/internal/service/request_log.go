@@ -39,6 +39,7 @@ type RequestLog struct {
 	FirstTokenMs *int    `json:"first_token_ms,omitempty"`
 	UserAgent    *string `json:"user_agent,omitempty"`
 	IPAddress    *string `json:"ip_address,omitempty"`
+	Payload      *RequestLogPayload `json:"payload,omitempty"`
 
 	CreatedAt time.Time `json:"created_at"`
 }

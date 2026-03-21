@@ -153,6 +153,34 @@
             </div>
           </dl>
         </section>
+
+        <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
+          <section class="card p-6">
+            <div class="flex items-center justify-between gap-3">
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                {{ t('requestLogs.requestBody') }}
+              </h2>
+              <div class="text-xs text-gray-500 dark:text-gray-400">
+                <span>{{ t('requestLogs.bodyBytes') }}: {{ requestLog.payload?.request_body_bytes ?? missingValue }}</span>
+                <span class="ml-3">{{ t('requestLogs.truncated') }}: {{ requestLog.payload?.request_body_truncated ? t('requestLogs.yes') : t('requestLogs.no') }}</span>
+              </div>
+            </div>
+            <pre class="mt-4 overflow-x-auto rounded-lg bg-gray-50 p-4 text-xs leading-6 text-gray-800 dark:bg-gray-900 dark:text-gray-100">{{ requestLog.payload?.request_body || t('requestLogs.payloadUnavailable') }}</pre>
+          </section>
+
+          <section class="card p-6">
+            <div class="flex items-center justify-between gap-3">
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                {{ t('requestLogs.responseBody') }}
+              </h2>
+              <div class="text-xs text-gray-500 dark:text-gray-400">
+                <span>{{ t('requestLogs.bodyBytes') }}: {{ requestLog.payload?.response_body_bytes ?? missingValue }}</span>
+                <span class="ml-3">{{ t('requestLogs.truncated') }}: {{ requestLog.payload?.response_body_truncated ? t('requestLogs.yes') : t('requestLogs.no') }}</span>
+              </div>
+            </div>
+            <pre class="mt-4 overflow-x-auto rounded-lg bg-gray-50 p-4 text-xs leading-6 text-gray-800 dark:bg-gray-900 dark:text-gray-100">{{ requestLog.payload?.response_body || t('requestLogs.payloadUnavailable') }}</pre>
+          </section>
+        </div>
       </template>
     </div>
   </AppLayout>

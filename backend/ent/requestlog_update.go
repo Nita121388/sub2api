@@ -13,6 +13,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/requestlog"
+	"github.com/Wei-Shaw/sub2api/ent/requestlogpayload"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 )
 
@@ -399,6 +400,25 @@ func (_u *RequestLogUpdate) SetAPIKey(v *APIKey) *RequestLogUpdate {
 	return _u.SetAPIKeyID(v.ID)
 }
 
+// SetPayloadID sets the "payload" edge to the RequestLogPayload entity by ID.
+func (_u *RequestLogUpdate) SetPayloadID(id int64) *RequestLogUpdate {
+	_u.mutation.SetPayloadID(id)
+	return _u
+}
+
+// SetNillablePayloadID sets the "payload" edge to the RequestLogPayload entity by ID if the given value is not nil.
+func (_u *RequestLogUpdate) SetNillablePayloadID(id *int64) *RequestLogUpdate {
+	if id != nil {
+		_u = _u.SetPayloadID(*id)
+	}
+	return _u
+}
+
+// SetPayload sets the "payload" edge to the RequestLogPayload entity.
+func (_u *RequestLogUpdate) SetPayload(v *RequestLogPayload) *RequestLogUpdate {
+	return _u.SetPayloadID(v.ID)
+}
+
 // Mutation returns the RequestLogMutation object of the builder.
 func (_u *RequestLogUpdate) Mutation() *RequestLogMutation {
 	return _u.mutation
@@ -413,6 +433,12 @@ func (_u *RequestLogUpdate) ClearUser() *RequestLogUpdate {
 // ClearAPIKey clears the "api_key" edge to the APIKey entity.
 func (_u *RequestLogUpdate) ClearAPIKey() *RequestLogUpdate {
 	_u.mutation.ClearAPIKey()
+	return _u
+}
+
+// ClearPayload clears the "payload" edge to the RequestLogPayload entity.
+func (_u *RequestLogUpdate) ClearPayload() *RequestLogUpdate {
+	_u.mutation.ClearPayload()
 	return _u
 }
 
@@ -656,6 +682,35 @@ func (_u *RequestLogUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(apikey.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.PayloadCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   requestlog.PayloadTable,
+			Columns: []string{requestlog.PayloadColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(requestlogpayload.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.PayloadIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   requestlog.PayloadTable,
+			Columns: []string{requestlog.PayloadColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(requestlogpayload.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -1053,6 +1108,25 @@ func (_u *RequestLogUpdateOne) SetAPIKey(v *APIKey) *RequestLogUpdateOne {
 	return _u.SetAPIKeyID(v.ID)
 }
 
+// SetPayloadID sets the "payload" edge to the RequestLogPayload entity by ID.
+func (_u *RequestLogUpdateOne) SetPayloadID(id int64) *RequestLogUpdateOne {
+	_u.mutation.SetPayloadID(id)
+	return _u
+}
+
+// SetNillablePayloadID sets the "payload" edge to the RequestLogPayload entity by ID if the given value is not nil.
+func (_u *RequestLogUpdateOne) SetNillablePayloadID(id *int64) *RequestLogUpdateOne {
+	if id != nil {
+		_u = _u.SetPayloadID(*id)
+	}
+	return _u
+}
+
+// SetPayload sets the "payload" edge to the RequestLogPayload entity.
+func (_u *RequestLogUpdateOne) SetPayload(v *RequestLogPayload) *RequestLogUpdateOne {
+	return _u.SetPayloadID(v.ID)
+}
+
 // Mutation returns the RequestLogMutation object of the builder.
 func (_u *RequestLogUpdateOne) Mutation() *RequestLogMutation {
 	return _u.mutation
@@ -1067,6 +1141,12 @@ func (_u *RequestLogUpdateOne) ClearUser() *RequestLogUpdateOne {
 // ClearAPIKey clears the "api_key" edge to the APIKey entity.
 func (_u *RequestLogUpdateOne) ClearAPIKey() *RequestLogUpdateOne {
 	_u.mutation.ClearAPIKey()
+	return _u
+}
+
+// ClearPayload clears the "payload" edge to the RequestLogPayload entity.
+func (_u *RequestLogUpdateOne) ClearPayload() *RequestLogUpdateOne {
+	_u.mutation.ClearPayload()
 	return _u
 }
 
@@ -1340,6 +1420,35 @@ func (_u *RequestLogUpdateOne) sqlSave(ctx context.Context) (_node *RequestLog, 
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(apikey.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.PayloadCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   requestlog.PayloadTable,
+			Columns: []string{requestlog.PayloadColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(requestlogpayload.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.PayloadIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   requestlog.PayloadTable,
+			Columns: []string{requestlog.PayloadColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(requestlogpayload.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

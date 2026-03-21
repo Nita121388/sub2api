@@ -168,6 +168,7 @@ func newOpenAIRecordUsageServiceForTest(usageRepo UsageLogRepository, userRepo U
 		nil,
 		&BillingCacheService{},
 		nil,
+		nil,
 		&DeferredService{},
 		nil,
 	)
@@ -291,12 +292,18 @@ func TestOpenAIGatewayServiceRecordUsage_WritesRequestLogMetadata(t *testing.T) 
 	requestRepo := &openAIRequestLogRepoStub{}
 	svc := newOpenAIRecordUsageServiceForTest(usageRepo, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{}, nil)
 	svc.requestLogRepo = requestRepo
+	svc.settingService = NewSettingService(&requestLogSettingRepoStub{
+		values: map[string]string{
+			SettingKeyRequestLogSettings: `{"capture_request_body":true,"capture_response_body":true,"max_request_body_bytes":4096,"max_response_body_bytes":4096,"retention_days":30}`,
+		},
+	}, nil)
 
 	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
 		Result: &OpenAIForwardResult{
 			RequestID:    "resp_request_log",
 			Model:        "gpt-5.4",
 			BillingModel: "gpt-5.4-mini",
+			ResponseBody: []byte(`{"id":"resp_request_log","status":"completed"}`),
 			Usage: OpenAIUsage{
 				InputTokens:          20,
 				OutputTokens:         7,
@@ -313,6 +320,7 @@ func TestOpenAIGatewayServiceRecordUsage_WritesRequestLogMetadata(t *testing.T) 
 		UpstreamEndpoint: "/v1/responses",
 		UserAgent:        "test-openai",
 		IPAddress:        "127.0.0.1",
+		RequestBody:      []byte(`{"api_key":"secret","input":"hello"}`),
 	})
 
 	require.NoError(t, err)
@@ -333,6 +341,12 @@ func TestOpenAIGatewayServiceRecordUsage_WritesRequestLogMetadata(t *testing.T) 
 	require.Equal(t, "/v1/responses", *requestRepo.lastLog.InboundEndpoint)
 	require.NotNil(t, requestRepo.lastLog.UserAgent)
 	require.Equal(t, "test-openai", *requestRepo.lastLog.UserAgent)
+	require.NotNil(t, requestRepo.lastLog.Payload)
+	require.NotNil(t, requestRepo.lastLog.Payload.RequestBody)
+	require.Contains(t, *requestRepo.lastLog.Payload.RequestBody, "[REDACTED]")
+	require.NotContains(t, *requestRepo.lastLog.Payload.RequestBody, "secret")
+	require.NotNil(t, requestRepo.lastLog.Payload.ResponseBody)
+	require.Contains(t, *requestRepo.lastLog.Payload.ResponseBody, `"status":"completed"`)
 }
 
 func TestOpenAIGatewayServiceRecordUsage_FallsBackToGroupDefaultRateOnResolverError(t *testing.T) {

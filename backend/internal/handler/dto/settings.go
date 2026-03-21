@@ -173,6 +173,14 @@ type StreamTimeoutSettings struct {
 	ThresholdWindowMinutes int    `json:"threshold_window_minutes"`
 }
 
+type RequestLogSettings struct {
+	CaptureRequestBody   bool `json:"capture_request_body"`
+	CaptureResponseBody  bool `json:"capture_response_body"`
+	MaxRequestBodyBytes  int  `json:"max_request_body_bytes"`
+	MaxResponseBodyBytes int  `json:"max_response_body_bytes"`
+	RetentionDays        int  `json:"retention_days"`
+}
+
 // RectifierSettings 请求整流器配置 DTO
 type RectifierSettings struct {
 	Enabled                  bool `json:"enabled"`

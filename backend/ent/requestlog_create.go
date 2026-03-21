@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/requestlog"
+	"github.com/Wei-Shaw/sub2api/ent/requestlogpayload"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 )
 
@@ -276,6 +277,25 @@ func (_c *RequestLogCreate) SetAPIKey(v *APIKey) *RequestLogCreate {
 	return _c.SetAPIKeyID(v.ID)
 }
 
+// SetPayloadID sets the "payload" edge to the RequestLogPayload entity by ID.
+func (_c *RequestLogCreate) SetPayloadID(id int64) *RequestLogCreate {
+	_c.mutation.SetPayloadID(id)
+	return _c
+}
+
+// SetNillablePayloadID sets the "payload" edge to the RequestLogPayload entity by ID if the given value is not nil.
+func (_c *RequestLogCreate) SetNillablePayloadID(id *int64) *RequestLogCreate {
+	if id != nil {
+		_c = _c.SetPayloadID(*id)
+	}
+	return _c
+}
+
+// SetPayload sets the "payload" edge to the RequestLogPayload entity.
+func (_c *RequestLogCreate) SetPayload(v *RequestLogPayload) *RequestLogCreate {
+	return _c.SetPayloadID(v.ID)
+}
+
 // Mutation returns the RequestLogMutation object of the builder.
 func (_c *RequestLogCreate) Mutation() *RequestLogMutation {
 	return _c.mutation
@@ -532,6 +552,22 @@ func (_c *RequestLogCreate) createSpec() (*RequestLog, *sqlgraph.CreateSpec) {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.APIKeyID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.PayloadIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   requestlog.PayloadTable,
+			Columns: []string{requestlog.PayloadColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(requestlogpayload.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

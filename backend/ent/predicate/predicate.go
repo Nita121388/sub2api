@@ -45,6 +45,9 @@ type RedeemCode func(*sql.Selector)
 // RequestLog is the predicate function for requestlog builders.
 type RequestLog func(*sql.Selector)
 
+// RequestLogPayload is the predicate function for requestlogpayload builders.
+type RequestLogPayload func(*sql.Selector)
+
 // SecuritySecret is the predicate function for securitysecret builders.
 type SecuritySecret func(*sql.Selector)
 

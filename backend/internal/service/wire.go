@@ -473,6 +473,7 @@ func ProvideOpenAIGatewayService(
 	billingService *BillingService,
 	rateLimitService *RateLimitService,
 	billingCacheService *BillingCacheService,
+	settingService *SettingService,
 	httpUpstream HTTPUpstream,
 	deferredService *DeferredService,
 	openAITokenProvider *OpenAITokenProvider,
@@ -491,11 +492,18 @@ func ProvideOpenAIGatewayService(
 		billingService,
 		rateLimitService,
 		billingCacheService,
+		settingService,
 		httpUpstream,
 		deferredService,
 		openAITokenProvider,
 	)
 	svc.requestLogRepo = requestLogRepo
+	return svc
+}
+
+func ProvideRequestLogCleanupService(db *sql.DB, timingWheel *TimingWheelService, settingService *SettingService) *RequestLogCleanupService {
+	svc := NewRequestLogCleanupService(db, timingWheel, settingService)
+	svc.Start()
 	return svc
 }
 
@@ -571,6 +579,7 @@ var ProviderSet = wire.NewSet(
 	ProvideTimingWheelService,
 	ProvideDashboardAggregationService,
 	ProvideUsageCleanupService,
+	ProvideRequestLogCleanupService,
 	ProvideDeferredService,
 	NewAntigravityQuotaFetcher,
 	NewUserAttributeService,

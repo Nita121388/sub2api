@@ -1221,6 +1221,29 @@ func HasAPIKeyWith(preds ...predicate.APIKey) predicate.RequestLog {
 	})
 }
 
+// HasPayload applies the HasEdge predicate on the "payload" edge.
+func HasPayload() predicate.RequestLog {
+	return predicate.RequestLog(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, PayloadTable, PayloadColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasPayloadWith applies the HasEdge predicate on the "payload" edge with a given conditions (other predicates).
+func HasPayloadWith(preds ...predicate.RequestLogPayload) predicate.RequestLog {
+	return predicate.RequestLog(func(s *sql.Selector) {
+		step := newPayloadStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.RequestLog) predicate.RequestLog {
 	return predicate.RequestLog(sql.AndPredicates(predicates...))

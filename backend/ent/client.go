@@ -28,6 +28,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/requestlog"
+	"github.com/Wei-Shaw/sub2api/ent/requestlogpayload"
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
@@ -72,6 +73,8 @@ type Client struct {
 	RedeemCode *RedeemCodeClient
 	// RequestLog is the client for interacting with the RequestLog builders.
 	RequestLog *RequestLogClient
+	// RequestLogPayload is the client for interacting with the RequestLogPayload builders.
+	RequestLogPayload *RequestLogPayloadClient
 	// SecuritySecret is the client for interacting with the SecuritySecret builders.
 	SecuritySecret *SecuritySecretClient
 	// Setting is the client for interacting with the Setting builders.
@@ -114,6 +117,7 @@ func (c *Client) init() {
 	c.Proxy = NewProxyClient(c.config)
 	c.RedeemCode = NewRedeemCodeClient(c.config)
 	c.RequestLog = NewRequestLogClient(c.config)
+	c.RequestLogPayload = NewRequestLogPayloadClient(c.config)
 	c.SecuritySecret = NewSecuritySecretClient(c.config)
 	c.Setting = NewSettingClient(c.config)
 	c.UsageCleanupTask = NewUsageCleanupTaskClient(c.config)
@@ -228,6 +232,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Proxy:                   NewProxyClient(cfg),
 		RedeemCode:              NewRedeemCodeClient(cfg),
 		RequestLog:              NewRequestLogClient(cfg),
+		RequestLogPayload:       NewRequestLogPayloadClient(cfg),
 		SecuritySecret:          NewSecuritySecretClient(cfg),
 		Setting:                 NewSettingClient(cfg),
 		UsageCleanupTask:        NewUsageCleanupTaskClient(cfg),
@@ -269,6 +274,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Proxy:                   NewProxyClient(cfg),
 		RedeemCode:              NewRedeemCodeClient(cfg),
 		RequestLog:              NewRequestLogClient(cfg),
+		RequestLogPayload:       NewRequestLogPayloadClient(cfg),
 		SecuritySecret:          NewSecuritySecretClient(cfg),
 		Setting:                 NewSettingClient(cfg),
 		UsageCleanupTask:        NewUsageCleanupTaskClient(cfg),
@@ -309,9 +315,10 @@ func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
 		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord, c.PromoCode,
-		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.RequestLog, c.SecuritySecret,
-		c.Setting, c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
-		c.UserAttributeDefinition, c.UserAttributeValue, c.UserSubscription,
+		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.RequestLog, c.RequestLogPayload,
+		c.SecuritySecret, c.Setting, c.UsageCleanupTask, c.UsageLog, c.User,
+		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
+		c.UserSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -323,9 +330,10 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
 		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord, c.PromoCode,
-		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.RequestLog, c.SecuritySecret,
-		c.Setting, c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
-		c.UserAttributeDefinition, c.UserAttributeValue, c.UserSubscription,
+		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.RequestLog, c.RequestLogPayload,
+		c.SecuritySecret, c.Setting, c.UsageCleanupTask, c.UsageLog, c.User,
+		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
+		c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -360,6 +368,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.RedeemCode.mutate(ctx, m)
 	case *RequestLogMutation:
 		return c.RequestLog.mutate(ctx, m)
+	case *RequestLogPayloadMutation:
+		return c.RequestLogPayload.mutate(ctx, m)
 	case *SecuritySecretMutation:
 		return c.SecuritySecret.mutate(ctx, m)
 	case *SettingMutation:
@@ -2510,6 +2520,22 @@ func (c *RequestLogClient) QueryAPIKey(_m *RequestLog) *APIKeyQuery {
 	return query
 }
 
+// QueryPayload queries the payload edge of a RequestLog.
+func (c *RequestLogClient) QueryPayload(_m *RequestLog) *RequestLogPayloadQuery {
+	query := (&RequestLogPayloadClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(requestlog.Table, requestlog.FieldID, id),
+			sqlgraph.To(requestlogpayload.Table, requestlogpayload.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, requestlog.PayloadTable, requestlog.PayloadColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *RequestLogClient) Hooks() []Hook {
 	return c.hooks.RequestLog
@@ -2532,6 +2558,155 @@ func (c *RequestLogClient) mutate(ctx context.Context, m *RequestLogMutation) (V
 		return (&RequestLogDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown RequestLog mutation op: %q", m.Op())
+	}
+}
+
+// RequestLogPayloadClient is a client for the RequestLogPayload schema.
+type RequestLogPayloadClient struct {
+	config
+}
+
+// NewRequestLogPayloadClient returns a client for the RequestLogPayload from the given config.
+func NewRequestLogPayloadClient(c config) *RequestLogPayloadClient {
+	return &RequestLogPayloadClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `requestlogpayload.Hooks(f(g(h())))`.
+func (c *RequestLogPayloadClient) Use(hooks ...Hook) {
+	c.hooks.RequestLogPayload = append(c.hooks.RequestLogPayload, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `requestlogpayload.Intercept(f(g(h())))`.
+func (c *RequestLogPayloadClient) Intercept(interceptors ...Interceptor) {
+	c.inters.RequestLogPayload = append(c.inters.RequestLogPayload, interceptors...)
+}
+
+// Create returns a builder for creating a RequestLogPayload entity.
+func (c *RequestLogPayloadClient) Create() *RequestLogPayloadCreate {
+	mutation := newRequestLogPayloadMutation(c.config, OpCreate)
+	return &RequestLogPayloadCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of RequestLogPayload entities.
+func (c *RequestLogPayloadClient) CreateBulk(builders ...*RequestLogPayloadCreate) *RequestLogPayloadCreateBulk {
+	return &RequestLogPayloadCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *RequestLogPayloadClient) MapCreateBulk(slice any, setFunc func(*RequestLogPayloadCreate, int)) *RequestLogPayloadCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &RequestLogPayloadCreateBulk{err: fmt.Errorf("calling to RequestLogPayloadClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*RequestLogPayloadCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &RequestLogPayloadCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for RequestLogPayload.
+func (c *RequestLogPayloadClient) Update() *RequestLogPayloadUpdate {
+	mutation := newRequestLogPayloadMutation(c.config, OpUpdate)
+	return &RequestLogPayloadUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *RequestLogPayloadClient) UpdateOne(_m *RequestLogPayload) *RequestLogPayloadUpdateOne {
+	mutation := newRequestLogPayloadMutation(c.config, OpUpdateOne, withRequestLogPayload(_m))
+	return &RequestLogPayloadUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *RequestLogPayloadClient) UpdateOneID(id int64) *RequestLogPayloadUpdateOne {
+	mutation := newRequestLogPayloadMutation(c.config, OpUpdateOne, withRequestLogPayloadID(id))
+	return &RequestLogPayloadUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for RequestLogPayload.
+func (c *RequestLogPayloadClient) Delete() *RequestLogPayloadDelete {
+	mutation := newRequestLogPayloadMutation(c.config, OpDelete)
+	return &RequestLogPayloadDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *RequestLogPayloadClient) DeleteOne(_m *RequestLogPayload) *RequestLogPayloadDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *RequestLogPayloadClient) DeleteOneID(id int64) *RequestLogPayloadDeleteOne {
+	builder := c.Delete().Where(requestlogpayload.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &RequestLogPayloadDeleteOne{builder}
+}
+
+// Query returns a query builder for RequestLogPayload.
+func (c *RequestLogPayloadClient) Query() *RequestLogPayloadQuery {
+	return &RequestLogPayloadQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeRequestLogPayload},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a RequestLogPayload entity by its id.
+func (c *RequestLogPayloadClient) Get(ctx context.Context, id int64) (*RequestLogPayload, error) {
+	return c.Query().Where(requestlogpayload.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *RequestLogPayloadClient) GetX(ctx context.Context, id int64) *RequestLogPayload {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryRequestLog queries the request_log edge of a RequestLogPayload.
+func (c *RequestLogPayloadClient) QueryRequestLog(_m *RequestLogPayload) *RequestLogQuery {
+	query := (&RequestLogClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(requestlogpayload.Table, requestlogpayload.FieldID, id),
+			sqlgraph.To(requestlog.Table, requestlog.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, true, requestlogpayload.RequestLogTable, requestlogpayload.RequestLogColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *RequestLogPayloadClient) Hooks() []Hook {
+	return c.hooks.RequestLogPayload
+}
+
+// Interceptors returns the client interceptors.
+func (c *RequestLogPayloadClient) Interceptors() []Interceptor {
+	return c.inters.RequestLogPayload
+}
+
+func (c *RequestLogPayloadClient) mutate(ctx context.Context, m *RequestLogPayloadMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&RequestLogPayloadCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&RequestLogPayloadUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&RequestLogPayloadUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&RequestLogPayloadDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown RequestLogPayload mutation op: %q", m.Op())
 	}
 }
 
@@ -4094,16 +4269,16 @@ type (
 	hooks struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead,
 		ErrorPassthroughRule, Group, IdempotencyRecord, PromoCode, PromoCodeUsage,
-		Proxy, RedeemCode, RequestLog, SecuritySecret, Setting, UsageCleanupTask,
-		UsageLog, User, UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
-		UserSubscription []ent.Hook
+		Proxy, RedeemCode, RequestLog, RequestLogPayload, SecuritySecret, Setting,
+		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
+		UserAttributeValue, UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead,
 		ErrorPassthroughRule, Group, IdempotencyRecord, PromoCode, PromoCodeUsage,
-		Proxy, RedeemCode, RequestLog, SecuritySecret, Setting, UsageCleanupTask,
-		UsageLog, User, UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
-		UserSubscription []ent.Interceptor
+		Proxy, RedeemCode, RequestLog, RequestLogPayload, SecuritySecret, Setting,
+		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
+		UserAttributeValue, UserSubscription []ent.Interceptor
 	}
 )
 

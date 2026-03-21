@@ -60,6 +60,16 @@ func TestMigrationsRunner_IsIdempotent_AndSchemaIsUpToDate(t *testing.T) {
 	requireIndex(t, tx, "request_logs", "idx_request_logs_api_key_id")
 	requireIndex(t, tx, "request_logs", "idx_request_logs_user_created")
 
+	var requestLogPayloadsRegclass sql.NullString
+	require.NoError(t, tx.QueryRowContext(context.Background(), "SELECT to_regclass('public.request_log_payloads')").Scan(&requestLogPayloadsRegclass))
+	require.True(t, requestLogPayloadsRegclass.Valid, "expected request_log_payloads table to exist")
+	requireColumn(t, tx, "request_log_payloads", "request_log_id", "bigint", 0, false)
+	requireColumn(t, tx, "request_log_payloads", "request_body", "bytea", 0, true)
+	requireColumn(t, tx, "request_log_payloads", "response_body", "bytea", 0, true)
+	requireColumn(t, tx, "request_log_payloads", "created_at", "timestamp with time zone", 0, false)
+	requireIndex(t, tx, "request_log_payloads", "idx_request_log_payloads_request_log_id")
+	requireIndex(t, tx, "request_log_payloads", "idx_request_log_payloads_created_at")
+
 	// usage_billing_dedup: billing idempotency narrow table
 	var usageBillingDedupRegclass sql.NullString
 	require.NoError(t, tx.QueryRowContext(context.Background(), "SELECT to_regclass('public.usage_billing_dedup')").Scan(&usageBillingDedupRegclass))

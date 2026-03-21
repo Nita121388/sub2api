@@ -56,6 +56,8 @@ const (
 	EdgeUser = "user"
 	// EdgeAPIKey holds the string denoting the api_key edge name in mutations.
 	EdgeAPIKey = "api_key"
+	// EdgePayload holds the string denoting the payload edge name in mutations.
+	EdgePayload = "payload"
 	// Table holds the table name of the requestlog in the database.
 	Table = "request_logs"
 	// UserTable is the table that holds the user relation/edge.
@@ -72,6 +74,13 @@ const (
 	APIKeyInverseTable = "api_keys"
 	// APIKeyColumn is the table column denoting the api_key relation/edge.
 	APIKeyColumn = "api_key_id"
+	// PayloadTable is the table that holds the payload relation/edge.
+	PayloadTable = "request_log_payloads"
+	// PayloadInverseTable is the table name for the RequestLogPayload entity.
+	// It exists in this package in order to avoid circular dependency with the "requestlogpayload" package.
+	PayloadInverseTable = "request_log_payloads"
+	// PayloadColumn is the table column denoting the payload relation/edge.
+	PayloadColumn = "request_log_id"
 )
 
 // Columns holds all SQL columns for requestlog fields.
@@ -253,6 +262,13 @@ func ByAPIKeyField(field string, opts ...sql.OrderTermOption) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newAPIKeyStep(), sql.OrderByField(field, opts...))
 	}
 }
+
+// ByPayloadField orders the results by payload field.
+func ByPayloadField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newPayloadStep(), sql.OrderByField(field, opts...))
+	}
+}
 func newUserStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -265,5 +281,12 @@ func newAPIKeyStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(APIKeyInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.M2O, true, APIKeyTable, APIKeyColumn),
+	)
+}
+func newPayloadStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(PayloadInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2O, false, PayloadTable, PayloadColumn),
 	)
 }

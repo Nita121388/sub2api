@@ -1046,7 +1046,17 @@ export interface RequestLog {
   first_token_ms?: number | null
   user_agent?: string | null
   ip_address?: string | null
+  payload?: RequestLogPayload | null
   created_at: string
+}
+
+export interface RequestLogPayload {
+  request_body?: string | null
+  request_body_bytes?: number | null
+  request_body_truncated: boolean
+  response_body?: string | null
+  response_body_bytes?: number | null
+  response_body_truncated: boolean
 }
 
 export interface UsageLogAccountSummary {

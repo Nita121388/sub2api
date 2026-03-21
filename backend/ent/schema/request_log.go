@@ -15,7 +15,7 @@ import (
 
 // RequestLog 定义请求日志实体的 schema。
 //
-// 记录每次 API 请求的元数据，用于会话可视化（不包含正文）。
+// 记录每次 API 请求的元数据；大正文存放在 payload 子表中。
 type RequestLog struct {
 	ent.Schema
 }
@@ -110,6 +110,8 @@ func (RequestLog) Edges() []ent.Edge {
 			Ref("request_logs").
 			Field("api_key_id").
 			Required().
+			Unique(),
+		edge.To("payload", RequestLogPayload.Type).
 			Unique(),
 	}
 }

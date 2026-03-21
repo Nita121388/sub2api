@@ -482,12 +482,13 @@ type ClaudeUsage struct {
 
 // ForwardResult 转发结果
 type ForwardResult struct {
-	RequestID string
-	Usage     ClaudeUsage
-	Model     string
+	RequestID        string
+	Usage            ClaudeUsage
+	Model            string
 	// UpstreamModel is the actual upstream model after mapping.
 	// Prefer empty when it is identical to Model; persistence normalizes equal values away as no-op mappings.
 	UpstreamModel    string
+	ResponseBody     []byte
 	Stream           bool
 	Duration         time.Duration
 	FirstTokenMs     *int // 首字时间（流式请求）
@@ -4527,6 +4528,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	var usage *ClaudeUsage
 	var firstTokenMs *int
 	var clientDisconnect bool
+	var responseBody []byte
 	if reqStream {
 		streamResult, err := s.handleStreamingResponse(ctx, resp, c, account, startTime, originalModel, reqModel, shouldMimicClaudeCode)
 		if err != nil {
@@ -4541,7 +4543,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		firstTokenMs = streamResult.firstTokenMs
 		clientDisconnect = streamResult.clientDisconnect
 	} else {
-		usage, err = s.handleNonStreamingResponse(ctx, resp, c, account, originalModel, reqModel)
+		usage, responseBody, err = s.handleNonStreamingResponse(ctx, resp, c, account, originalModel, reqModel)
 		if err != nil {
 			return nil, err
 		}
@@ -4552,6 +4554,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		Usage:            *usage,
 		Model:            originalModel, // 使用原始模型用于计费和日志
 		UpstreamModel:    mappedModel,
+		ResponseBody:     responseBody,
 		Stream:           reqStream,
 		Duration:         time.Since(startTime),
 		FirstTokenMs:     firstTokenMs,
@@ -4776,6 +4779,7 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 	var usage *ClaudeUsage
 	var firstTokenMs *int
 	var clientDisconnect bool
+	var responseBody []byte
 	if input.RequestStream {
 		streamResult, err := s.handleStreamingResponseAnthropicAPIKeyPassthrough(ctx, resp, c, account, input.StartTime, input.RequestModel)
 		if err != nil {
@@ -4785,7 +4789,7 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 		firstTokenMs = streamResult.firstTokenMs
 		clientDisconnect = streamResult.clientDisconnect
 	} else {
-		usage, err = s.handleNonStreamingResponseAnthropicAPIKeyPassthrough(ctx, resp, c, account)
+		usage, responseBody, err = s.handleNonStreamingResponseAnthropicAPIKeyPassthrough(ctx, resp, c, account)
 		if err != nil {
 			return nil, err
 		}
@@ -4799,6 +4803,7 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 		Usage:            *usage,
 		Model:            input.OriginalModel,
 		UpstreamModel:    input.RequestModel,
+		ResponseBody:     responseBody,
 		Stream:           input.RequestStream,
 		Duration:         time.Since(input.StartTime),
 		FirstTokenMs:     firstTokenMs,
@@ -5153,7 +5158,7 @@ func (s *GatewayService) handleNonStreamingResponseAnthropicAPIKeyPassthrough(
 	resp *http.Response,
 	c *gin.Context,
 	account *Account,
-) (*ClaudeUsage, error) {
+) (*ClaudeUsage, []byte, error) {
 	if s.rateLimitService != nil {
 		s.rateLimitService.UpdateSessionWindow(ctx, account, resp.Header)
 	}
@@ -5171,7 +5176,7 @@ func (s *GatewayService) handleNonStreamingResponseAnthropicAPIKeyPassthrough(
 				},
 			})
 		}
-		return nil, err
+		return nil, nil, err
 	}
 
 	usage := parseClaudeUsageFromResponseBody(body)
@@ -5182,7 +5187,7 @@ func (s *GatewayService) handleNonStreamingResponseAnthropicAPIKeyPassthrough(
 		contentType = "application/json"
 	}
 	c.Data(resp.StatusCode, contentType, body)
-	return usage, nil
+	return usage, body, nil
 }
 
 func writeAnthropicPassthroughResponseHeaders(dst http.Header, src http.Header, filter *responseheaders.CompiledHeaderFilter) {
@@ -5283,6 +5288,7 @@ func (s *GatewayService) forwardBedrock(
 	var usage *ClaudeUsage
 	var firstTokenMs *int
 	var clientDisconnect bool
+	var responseBody []byte
 	if reqStream {
 		streamResult, err := s.handleBedrockStreamingResponse(ctx, resp, c, account, startTime, reqModel)
 		if err != nil {
@@ -5292,7 +5298,7 @@ func (s *GatewayService) forwardBedrock(
 		firstTokenMs = streamResult.firstTokenMs
 		clientDisconnect = streamResult.clientDisconnect
 	} else {
-		usage, err = s.handleBedrockNonStreamingResponse(ctx, resp, c, account)
+		usage, responseBody, err = s.handleBedrockNonStreamingResponse(ctx, resp, c, account)
 		if err != nil {
 			return nil, err
 		}
@@ -5306,6 +5312,7 @@ func (s *GatewayService) forwardBedrock(
 		Usage:            *usage,
 		Model:            reqModel,
 		UpstreamModel:    mappedModel,
+		ResponseBody:     responseBody,
 		Stream:           reqStream,
 		Duration:         time.Since(startTime),
 		FirstTokenMs:     firstTokenMs,
@@ -5533,7 +5540,7 @@ func (s *GatewayService) handleBedrockNonStreamingResponse(
 	resp *http.Response,
 	c *gin.Context,
 	account *Account,
-) (*ClaudeUsage, error) {
+) (*ClaudeUsage, []byte, error) {
 	maxBytes := resolveUpstreamResponseReadLimit(s.cfg)
 	body, err := readUpstreamResponseBodyLimited(resp.Body, maxBytes)
 	if err != nil {
@@ -5547,7 +5554,7 @@ func (s *GatewayService) handleBedrockNonStreamingResponse(
 				},
 			})
 		}
-		return nil, err
+		return nil, nil, err
 	}
 
 	// 转换 Bedrock 特有的 amazon-bedrock-invocationMetrics 为标准 Anthropic usage 格式
@@ -5561,7 +5568,7 @@ func (s *GatewayService) handleBedrockNonStreamingResponse(
 		c.Header("x-request-id", v)
 	}
 	c.Data(resp.StatusCode, "application/json", body)
-	return usage, nil
+	return usage, body, nil
 }
 
 func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Context, account *Account, body []byte, token, tokenType, modelID string, reqStream bool, mimicClaudeCode bool) (*http.Request, error) {
@@ -7078,7 +7085,7 @@ func rewriteCacheCreationJSON(usageObj map[string]any, target string) bool {
 	return true
 }
 
-func (s *GatewayService) handleNonStreamingResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, originalModel, mappedModel string) (*ClaudeUsage, error) {
+func (s *GatewayService) handleNonStreamingResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, originalModel, mappedModel string) (*ClaudeUsage, []byte, error) {
 	// 更新5h窗口状态
 	s.rateLimitService.UpdateSessionWindow(ctx, account, resp.Header)
 
@@ -7095,7 +7102,7 @@ func (s *GatewayService) handleNonStreamingResponse(ctx context.Context, resp *h
 				},
 			})
 		}
-		return nil, err
+		return nil, nil, err
 	}
 
 	// 解析usage
@@ -7103,7 +7110,7 @@ func (s *GatewayService) handleNonStreamingResponse(ctx context.Context, resp *h
 		Usage ClaudeUsage `json:"usage"`
 	}
 	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, fmt.Errorf("parse response: %w", err)
+		return nil, nil, fmt.Errorf("parse response: %w", err)
 	}
 
 	// 解析嵌套的 cache_creation 对象中的 5m/1h 明细
@@ -7156,7 +7163,7 @@ func (s *GatewayService) handleNonStreamingResponse(ctx context.Context, resp *h
 	// 写入响应
 	c.Data(resp.StatusCode, contentType, body)
 
-	return &response.Usage, nil
+	return &response.Usage, body, nil
 }
 
 // replaceModelInResponseBody 替换响应体中的model字段
@@ -7200,6 +7207,7 @@ type RecordUsageInput struct {
 	UpstreamEndpoint   string             // 上游端点（标准化后的上游路径）
 	UserAgent          string             // 请求的 User-Agent
 	IPAddress          string             // 请求的客户端 IP 地址
+	RequestBody        []byte             // 请求体快照（用于 request log payload）
 	RequestPayloadHash string             // 请求体语义哈希，用于降低 request_id 误复用时的静默误去重风险
 	ForceCacheBilling  bool               // 强制缓存计费：将 input_tokens 转为 cache_read 计费（用于粘性会话切换）
 	APIKeyService      APIKeyQuotaUpdater // 可选：用于更新API Key配额
@@ -7641,6 +7649,11 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 		result.Usage.OutputTokens,
 		cost.TotalCost,
 	)
+	if s.settingService != nil {
+		if settings, err := s.settingService.GetRequestLogSettings(ctx); err == nil {
+			requestLog.Payload = BuildRequestLogPayload(settings, input.RequestBody, result.ResponseBody)
+		}
+	}
 
 	// 添加 UserAgent
 	if input.UserAgent != "" {
@@ -7703,6 +7716,7 @@ type RecordUsageLongContextInput struct {
 	UpstreamEndpoint      string             // 上游端点（标准化后的上游路径）
 	UserAgent             string             // 请求的 User-Agent
 	IPAddress             string             // 请求的客户端 IP 地址
+	RequestBody           []byte             // 请求体快照（用于 request log payload）
 	RequestPayloadHash    string             // 请求体语义哈希，用于降低 request_id 误复用时的静默误去重风险
 	LongContextThreshold  int                // 长上下文阈值（如 200000）
 	LongContextMultiplier float64            // 超出阈值部分的倍率（如 2.0）
@@ -7842,6 +7856,11 @@ func (s *GatewayService) RecordUsageWithLongContext(ctx context.Context, input *
 		result.Usage.OutputTokens,
 		cost.TotalCost,
 	)
+	if s.settingService != nil {
+		if settings, err := s.settingService.GetRequestLogSettings(ctx); err == nil {
+			requestLog.Payload = BuildRequestLogPayload(settings, input.RequestBody, result.ResponseBody)
+		}
+	}
 
 	// 添加 UserAgent
 	if input.UserAgent != "" {

@@ -22,6 +22,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/requestlog"
+	"github.com/Wei-Shaw/sub2api/ent/requestlogpayload"
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
@@ -440,6 +441,33 @@ func (f TraverseRequestLog) Traverse(ctx context.Context, q ent.Query) error {
 	return fmt.Errorf("unexpected query type %T. expect *ent.RequestLogQuery", q)
 }
 
+// The RequestLogPayloadFunc type is an adapter to allow the use of ordinary function as a Querier.
+type RequestLogPayloadFunc func(context.Context, *ent.RequestLogPayloadQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f RequestLogPayloadFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.RequestLogPayloadQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.RequestLogPayloadQuery", q)
+}
+
+// The TraverseRequestLogPayload type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseRequestLogPayload func(context.Context, *ent.RequestLogPayloadQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseRequestLogPayload) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseRequestLogPayload) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.RequestLogPayloadQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.RequestLogPayloadQuery", q)
+}
+
 // The SecuritySecretFunc type is an adapter to allow the use of ordinary function as a Querier.
 type SecuritySecretFunc func(context.Context, *ent.SecuritySecretQuery) (ent.Value, error)
 
@@ -712,6 +740,8 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.RedeemCodeQuery, predicate.RedeemCode, redeemcode.OrderOption]{typ: ent.TypeRedeemCode, tq: q}, nil
 	case *ent.RequestLogQuery:
 		return &query[*ent.RequestLogQuery, predicate.RequestLog, requestlog.OrderOption]{typ: ent.TypeRequestLog, tq: q}, nil
+	case *ent.RequestLogPayloadQuery:
+		return &query[*ent.RequestLogPayloadQuery, predicate.RequestLogPayload, requestlogpayload.OrderOption]{typ: ent.TypeRequestLogPayload, tq: q}, nil
 	case *ent.SecuritySecretQuery:
 		return &query[*ent.SecuritySecretQuery, predicate.SecuritySecret, securitysecret.OrderOption]{typ: ent.TypeSecuritySecret, tq: q}, nil
 	case *ent.SettingQuery:

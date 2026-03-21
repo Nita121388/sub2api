@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/requestlog"
+	"github.com/Wei-Shaw/sub2api/ent/requestlogpayload"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 )
 
@@ -69,9 +70,11 @@ type RequestLogEdges struct {
 	User *User `json:"user,omitempty"`
 	// APIKey holds the value of the api_key edge.
 	APIKey *APIKey `json:"api_key,omitempty"`
+	// Payload holds the value of the payload edge.
+	Payload *RequestLogPayload `json:"payload,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
+	loadedTypes [3]bool
 }
 
 // UserOrErr returns the User value or an error if the edge
@@ -94,6 +97,17 @@ func (e RequestLogEdges) APIKeyOrErr() (*APIKey, error) {
 		return nil, &NotFoundError{label: apikey.Label}
 	}
 	return nil, &NotLoadedError{edge: "api_key"}
+}
+
+// PayloadOrErr returns the Payload value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e RequestLogEdges) PayloadOrErr() (*RequestLogPayload, error) {
+	if e.Payload != nil {
+		return e.Payload, nil
+	} else if e.loadedTypes[2] {
+		return nil, &NotFoundError{label: requestlogpayload.Label}
+	}
+	return nil, &NotLoadedError{edge: "payload"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -278,6 +292,11 @@ func (_m *RequestLog) QueryUser() *UserQuery {
 // QueryAPIKey queries the "api_key" edge of the RequestLog entity.
 func (_m *RequestLog) QueryAPIKey() *APIKeyQuery {
 	return NewRequestLogClient(_m.config).QueryAPIKey(_m)
+}
+
+// QueryPayload queries the "payload" edge of the RequestLog entity.
+func (_m *RequestLog) QueryPayload() *RequestLogPayloadQuery {
+	return NewRequestLogClient(_m.config).QueryPayload(_m)
 }
 
 // Update returns a builder for updating this RequestLog.

@@ -4,6 +4,7 @@ package ent
 
 import (
 	"context"
+	"database/sql/driver"
 	"fmt"
 	"math"
 
@@ -15,19 +16,21 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/requestlog"
+	"github.com/Wei-Shaw/sub2api/ent/requestlogpayload"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 )
 
 // RequestLogQuery is the builder for querying RequestLog entities.
 type RequestLogQuery struct {
 	config
-	ctx        *QueryContext
-	order      []requestlog.OrderOption
-	inters     []Interceptor
-	predicates []predicate.RequestLog
-	withUser   *UserQuery
-	withAPIKey *APIKeyQuery
-	modifiers  []func(*sql.Selector)
+	ctx         *QueryContext
+	order       []requestlog.OrderOption
+	inters      []Interceptor
+	predicates  []predicate.RequestLog
+	withUser    *UserQuery
+	withAPIKey  *APIKeyQuery
+	withPayload *RequestLogPayloadQuery
+	modifiers   []func(*sql.Selector)
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -101,6 +104,28 @@ func (_q *RequestLogQuery) QueryAPIKey() *APIKeyQuery {
 			sqlgraph.From(requestlog.Table, requestlog.FieldID, selector),
 			sqlgraph.To(apikey.Table, apikey.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, requestlog.APIKeyTable, requestlog.APIKeyColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryPayload chains the current query on the "payload" edge.
+func (_q *RequestLogQuery) QueryPayload() *RequestLogPayloadQuery {
+	query := (&RequestLogPayloadClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(requestlog.Table, requestlog.FieldID, selector),
+			sqlgraph.To(requestlogpayload.Table, requestlogpayload.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, requestlog.PayloadTable, requestlog.PayloadColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -295,13 +320,14 @@ func (_q *RequestLogQuery) Clone() *RequestLogQuery {
 		return nil
 	}
 	return &RequestLogQuery{
-		config:     _q.config,
-		ctx:        _q.ctx.Clone(),
-		order:      append([]requestlog.OrderOption{}, _q.order...),
-		inters:     append([]Interceptor{}, _q.inters...),
-		predicates: append([]predicate.RequestLog{}, _q.predicates...),
-		withUser:   _q.withUser.Clone(),
-		withAPIKey: _q.withAPIKey.Clone(),
+		config:      _q.config,
+		ctx:         _q.ctx.Clone(),
+		order:       append([]requestlog.OrderOption{}, _q.order...),
+		inters:      append([]Interceptor{}, _q.inters...),
+		predicates:  append([]predicate.RequestLog{}, _q.predicates...),
+		withUser:    _q.withUser.Clone(),
+		withAPIKey:  _q.withAPIKey.Clone(),
+		withPayload: _q.withPayload.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -327,6 +353,17 @@ func (_q *RequestLogQuery) WithAPIKey(opts ...func(*APIKeyQuery)) *RequestLogQue
 		opt(query)
 	}
 	_q.withAPIKey = query
+	return _q
+}
+
+// WithPayload tells the query-builder to eager-load the nodes that are connected to
+// the "payload" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *RequestLogQuery) WithPayload(opts ...func(*RequestLogPayloadQuery)) *RequestLogQuery {
+	query := (&RequestLogPayloadClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withPayload = query
 	return _q
 }
 
@@ -408,9 +445,10 @@ func (_q *RequestLogQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*R
 	var (
 		nodes       = []*RequestLog{}
 		_spec       = _q.querySpec()
-		loadedTypes = [2]bool{
+		loadedTypes = [3]bool{
 			_q.withUser != nil,
 			_q.withAPIKey != nil,
+			_q.withPayload != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -443,6 +481,12 @@ func (_q *RequestLogQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*R
 	if query := _q.withAPIKey; query != nil {
 		if err := _q.loadAPIKey(ctx, query, nodes, nil,
 			func(n *RequestLog, e *APIKey) { n.Edges.APIKey = e }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withPayload; query != nil {
+		if err := _q.loadPayload(ctx, query, nodes, nil,
+			func(n *RequestLog, e *RequestLogPayload) { n.Edges.Payload = e }); err != nil {
 			return nil, err
 		}
 	}
@@ -504,6 +548,33 @@ func (_q *RequestLogQuery) loadAPIKey(ctx context.Context, query *APIKeyQuery, n
 		for i := range nodes {
 			assign(nodes[i], n)
 		}
+	}
+	return nil
+}
+func (_q *RequestLogQuery) loadPayload(ctx context.Context, query *RequestLogPayloadQuery, nodes []*RequestLog, init func(*RequestLog), assign func(*RequestLog, *RequestLogPayload)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*RequestLog)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(requestlogpayload.FieldRequestLogID)
+	}
+	query.Where(predicate.RequestLogPayload(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(requestlog.PayloadColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.RequestLogID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "request_log_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
 	}
 	return nil
 }

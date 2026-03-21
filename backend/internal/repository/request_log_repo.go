@@ -24,7 +24,12 @@ func (r *requestLogRepository) Create(ctx context.Context, log *service.RequestL
 		return nil
 	}
 
-	builder := r.client.RequestLog.Create().
+	tx, err := r.client.Tx(ctx)
+	if err != nil {
+		return err
+	}
+
+	builder := tx.RequestLog.Create().
 		SetUserID(log.UserID).
 		SetAPIKeyID(log.APIKeyID).
 		SetModel(log.Model).
@@ -70,8 +75,53 @@ func (r *requestLogRepository) Create(ctx context.Context, log *service.RequestL
 
 	created, err := builder.Save(ctx)
 	if err != nil {
+		_ = tx.Rollback()
 		return err
 	}
+
+	if log.Payload != nil {
+		payloadBuilder := tx.RequestLogPayload.Create().
+			SetRequestLogID(created.ID).
+			SetRequestBodyTruncated(log.Payload.RequestBodyTruncated).
+			SetResponseBodyTruncated(log.Payload.ResponseBodyTruncated).
+			SetCreatedAt(log.CreatedAt)
+
+		if encoded, encoding, encodeErr := service.EncodeRequestLogPayload(log.Payload.RequestBody); encodeErr != nil {
+			_ = tx.Rollback()
+			return encodeErr
+		} else if len(encoded) > 0 {
+			payloadBuilder.SetRequestBody(encoded)
+			if encoding != nil {
+				payloadBuilder.SetRequestBodyEncoding(*encoding)
+			}
+		}
+		if log.Payload.RequestBodyBytes != nil {
+			payloadBuilder.SetRequestBodyBytes(*log.Payload.RequestBodyBytes)
+		}
+
+		if encoded, encoding, encodeErr := service.EncodeRequestLogPayload(log.Payload.ResponseBody); encodeErr != nil {
+			_ = tx.Rollback()
+			return encodeErr
+		} else if len(encoded) > 0 {
+			payloadBuilder.SetResponseBody(encoded)
+			if encoding != nil {
+				payloadBuilder.SetResponseBodyEncoding(*encoding)
+			}
+		}
+		if log.Payload.ResponseBodyBytes != nil {
+			payloadBuilder.SetResponseBodyBytes(*log.Payload.ResponseBodyBytes)
+		}
+
+		if _, err := payloadBuilder.Save(ctx); err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
 	log.ID = created.ID
 	return nil
 }
@@ -81,7 +131,10 @@ func (r *requestLogRepository) CreateBestEffort(ctx context.Context, log *servic
 }
 
 func (r *requestLogRepository) GetByID(ctx context.Context, id int64) (*service.RequestLog, error) {
-	m, err := r.client.RequestLog.Query().Where(dbrequestlog.IDEQ(id)).Only(ctx)
+	m, err := r.client.RequestLog.Query().
+		Where(dbrequestlog.IDEQ(id)).
+		WithPayload().
+		Only(ctx)
 	if err != nil {
 		return nil, translatePersistenceError(err, service.ErrRequestLogNotFound, nil)
 	}
@@ -155,6 +208,31 @@ func requestLogEntityToService(m *dbent.RequestLog) *service.RequestLog {
 		FirstTokenMs:     m.FirstTokenMs,
 		UserAgent:        m.UserAgent,
 		IPAddress:        m.IPAddress,
+		Payload:          requestLogPayloadEntityToService(m.Edges.Payload),
 		CreatedAt:        m.CreatedAt,
+	}
+}
+
+func requestLogPayloadEntityToService(m *dbent.RequestLogPayload) *service.RequestLogPayload {
+	if m == nil {
+		return nil
+	}
+
+	requestBody, err := service.DecodeRequestLogPayload(m.RequestBody, m.RequestBodyEncoding)
+	if err != nil {
+		requestBody = nil
+	}
+	responseBody, err := service.DecodeRequestLogPayload(m.ResponseBody, m.ResponseBodyEncoding)
+	if err != nil {
+		responseBody = nil
+	}
+
+	return &service.RequestLogPayload{
+		RequestBody:           requestBody,
+		RequestBodyBytes:      m.RequestBodyBytes,
+		RequestBodyTruncated:  m.RequestBodyTruncated,
+		ResponseBody:          responseBody,
+		ResponseBodyBytes:     m.ResponseBodyBytes,
+		ResponseBodyTruncated: m.ResponseBodyTruncated,
 	}
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/requestlog"
+	"github.com/Wei-Shaw/sub2api/ent/requestlogpayload"
 	"github.com/Wei-Shaw/sub2api/ent/schema"
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
@@ -752,6 +753,28 @@ func init() {
 	requestlogDescCreatedAt := requestlogFields[18].Descriptor()
 	// requestlog.DefaultCreatedAt holds the default value on creation for the created_at field.
 	requestlog.DefaultCreatedAt = requestlogDescCreatedAt.Default.(func() time.Time)
+	requestlogpayloadFields := schema.RequestLogPayload{}.Fields()
+	_ = requestlogpayloadFields
+	// requestlogpayloadDescRequestBodyEncoding is the schema descriptor for request_body_encoding field.
+	requestlogpayloadDescRequestBodyEncoding := requestlogpayloadFields[2].Descriptor()
+	// requestlogpayload.RequestBodyEncodingValidator is a validator for the "request_body_encoding" field. It is called by the builders before save.
+	requestlogpayload.RequestBodyEncodingValidator = requestlogpayloadDescRequestBodyEncoding.Validators[0].(func(string) error)
+	// requestlogpayloadDescRequestBodyTruncated is the schema descriptor for request_body_truncated field.
+	requestlogpayloadDescRequestBodyTruncated := requestlogpayloadFields[4].Descriptor()
+	// requestlogpayload.DefaultRequestBodyTruncated holds the default value on creation for the request_body_truncated field.
+	requestlogpayload.DefaultRequestBodyTruncated = requestlogpayloadDescRequestBodyTruncated.Default.(bool)
+	// requestlogpayloadDescResponseBodyEncoding is the schema descriptor for response_body_encoding field.
+	requestlogpayloadDescResponseBodyEncoding := requestlogpayloadFields[6].Descriptor()
+	// requestlogpayload.ResponseBodyEncodingValidator is a validator for the "response_body_encoding" field. It is called by the builders before save.
+	requestlogpayload.ResponseBodyEncodingValidator = requestlogpayloadDescResponseBodyEncoding.Validators[0].(func(string) error)
+	// requestlogpayloadDescResponseBodyTruncated is the schema descriptor for response_body_truncated field.
+	requestlogpayloadDescResponseBodyTruncated := requestlogpayloadFields[8].Descriptor()
+	// requestlogpayload.DefaultResponseBodyTruncated holds the default value on creation for the response_body_truncated field.
+	requestlogpayload.DefaultResponseBodyTruncated = requestlogpayloadDescResponseBodyTruncated.Default.(bool)
+	// requestlogpayloadDescCreatedAt is the schema descriptor for created_at field.
+	requestlogpayloadDescCreatedAt := requestlogpayloadFields[9].Descriptor()
+	// requestlogpayload.DefaultCreatedAt holds the default value on creation for the created_at field.
+	requestlogpayload.DefaultCreatedAt = requestlogpayloadDescCreatedAt.Default.(func() time.Time)
 	securitysecretMixin := schema.SecuritySecret{}.Mixin()
 	securitysecretMixinFields0 := securitysecretMixin[0].Fields()
 	_ = securitysecretMixinFields0

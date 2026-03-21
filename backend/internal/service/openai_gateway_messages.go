@@ -297,6 +297,7 @@ func (s *OpenAIGatewayService) handleAnthropicBufferedStreamingResponse(
 		responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
 	}
 	c.JSON(http.StatusOK, anthropicResp)
+	responseBody, _ := json.Marshal(anthropicResp)
 
 	return &OpenAIForwardResult{
 		RequestID:     requestID,
@@ -304,6 +305,7 @@ func (s *OpenAIGatewayService) handleAnthropicBufferedStreamingResponse(
 		Model:         originalModel,
 		BillingModel:  mappedModel,
 		UpstreamModel: mappedModel,
+		ResponseBody:  responseBody,
 		Stream:        false,
 		Duration:      time.Since(startTime),
 	}, nil

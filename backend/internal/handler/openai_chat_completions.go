@@ -265,6 +265,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 				UpstreamEndpoint: GetUpstreamEndpoint(c, account.Platform),
 				UserAgent:        userAgent,
 				IPAddress:        clientIP,
+				RequestBody:      body,
 				APIKeyService:    h.apiKeyService,
 			}); err != nil {
 				logger.L().With(

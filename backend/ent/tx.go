@@ -40,6 +40,8 @@ type Tx struct {
 	RedeemCode *RedeemCodeClient
 	// RequestLog is the client for interacting with the RequestLog builders.
 	RequestLog *RequestLogClient
+	// RequestLogPayload is the client for interacting with the RequestLogPayload builders.
+	RequestLogPayload *RequestLogPayloadClient
 	// SecuritySecret is the client for interacting with the SecuritySecret builders.
 	SecuritySecret *SecuritySecretClient
 	// Setting is the client for interacting with the Setting builders.
@@ -202,6 +204,7 @@ func (tx *Tx) init() {
 	tx.Proxy = NewProxyClient(tx.config)
 	tx.RedeemCode = NewRedeemCodeClient(tx.config)
 	tx.RequestLog = NewRequestLogClient(tx.config)
+	tx.RequestLogPayload = NewRequestLogPayloadClient(tx.config)
 	tx.SecuritySecret = NewSecuritySecretClient(tx.config)
 	tx.Setting = NewSettingClient(tx.config)
 	tx.UsageCleanupTask = NewUsageCleanupTaskClient(tx.config)

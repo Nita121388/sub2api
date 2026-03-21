@@ -731,6 +731,46 @@ var (
 			},
 		},
 	}
+	// RequestLogPayloadsColumns holds the columns for the "request_log_payloads" table.
+	RequestLogPayloadsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "request_body", Type: field.TypeBytes, Nullable: true},
+		{Name: "request_body_encoding", Type: field.TypeString, Nullable: true, Size: 16},
+		{Name: "request_body_bytes", Type: field.TypeInt, Nullable: true},
+		{Name: "request_body_truncated", Type: field.TypeBool, Default: false},
+		{Name: "response_body", Type: field.TypeBytes, Nullable: true},
+		{Name: "response_body_encoding", Type: field.TypeString, Nullable: true, Size: 16},
+		{Name: "response_body_bytes", Type: field.TypeInt, Nullable: true},
+		{Name: "response_body_truncated", Type: field.TypeBool, Default: false},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "request_log_id", Type: field.TypeInt64, Unique: true},
+	}
+	// RequestLogPayloadsTable holds the schema information for the "request_log_payloads" table.
+	RequestLogPayloadsTable = &schema.Table{
+		Name:       "request_log_payloads",
+		Columns:    RequestLogPayloadsColumns,
+		PrimaryKey: []*schema.Column{RequestLogPayloadsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "request_log_payloads_request_logs_payload",
+				Columns:    []*schema.Column{RequestLogPayloadsColumns[10]},
+				RefColumns: []*schema.Column{RequestLogsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "requestlogpayload_request_log_id",
+				Unique:  true,
+				Columns: []*schema.Column{RequestLogPayloadsColumns[10]},
+			},
+			{
+				Name:    "requestlogpayload_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{RequestLogPayloadsColumns[9]},
+			},
+		},
+	}
 	// SecuritySecretsColumns holds the columns for the "security_secrets" table.
 	SecuritySecretsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -1195,6 +1235,7 @@ var (
 		ProxiesTable,
 		RedeemCodesTable,
 		RequestLogsTable,
+		RequestLogPayloadsTable,
 		SecuritySecretsTable,
 		SettingsTable,
 		UsageCleanupTasksTable,
@@ -1259,6 +1300,10 @@ func init() {
 	RequestLogsTable.ForeignKeys[1].RefTable = UsersTable
 	RequestLogsTable.Annotation = &entsql.Annotation{
 		Table: "request_logs",
+	}
+	RequestLogPayloadsTable.ForeignKeys[0].RefTable = RequestLogsTable
+	RequestLogPayloadsTable.Annotation = &entsql.Annotation{
+		Table: "request_log_payloads",
 	}
 	SecuritySecretsTable.Annotation = &entsql.Annotation{
 		Table: "security_secrets",

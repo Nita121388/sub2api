@@ -1070,6 +1070,68 @@ func (h *SettingHandler) GetStreamTimeoutSettings(c *gin.Context) {
 	})
 }
 
+// GetRequestLogSettings 获取请求日志 payload/retention 配置
+// GET /api/v1/admin/settings/request-log
+func (h *SettingHandler) GetRequestLogSettings(c *gin.Context) {
+	settings, err := h.settingService.GetRequestLogSettings(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, dto.RequestLogSettings{
+		CaptureRequestBody:   settings.CaptureRequestBody,
+		CaptureResponseBody:  settings.CaptureResponseBody,
+		MaxRequestBodyBytes:  settings.MaxRequestBodyBytes,
+		MaxResponseBodyBytes: settings.MaxResponseBodyBytes,
+		RetentionDays:        settings.RetentionDays,
+	})
+}
+
+type UpdateRequestLogSettingsRequest struct {
+	CaptureRequestBody   bool `json:"capture_request_body"`
+	CaptureResponseBody  bool `json:"capture_response_body"`
+	MaxRequestBodyBytes  int  `json:"max_request_body_bytes"`
+	MaxResponseBodyBytes int  `json:"max_response_body_bytes"`
+	RetentionDays        int  `json:"retention_days"`
+}
+
+// UpdateRequestLogSettings 更新请求日志 payload/retention 配置
+// PUT /api/v1/admin/settings/request-log
+func (h *SettingHandler) UpdateRequestLogSettings(c *gin.Context) {
+	var req UpdateRequestLogSettingsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	settings := &service.RequestLogSettings{
+		CaptureRequestBody:   req.CaptureRequestBody,
+		CaptureResponseBody:  req.CaptureResponseBody,
+		MaxRequestBodyBytes:  req.MaxRequestBodyBytes,
+		MaxResponseBodyBytes: req.MaxResponseBodyBytes,
+		RetentionDays:        req.RetentionDays,
+	}
+	if err := h.settingService.SetRequestLogSettings(c.Request.Context(), settings); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+
+	updated, err := h.settingService.GetRequestLogSettings(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, dto.RequestLogSettings{
+		CaptureRequestBody:   updated.CaptureRequestBody,
+		CaptureResponseBody:  updated.CaptureResponseBody,
+		MaxRequestBodyBytes:  updated.MaxRequestBodyBytes,
+		MaxResponseBodyBytes: updated.MaxResponseBodyBytes,
+		RetentionDays:        updated.RetentionDays,
+	})
+}
+
 func toSoraS3SettingsDTO(settings *service.SoraS3Settings) dto.SoraS3Settings {
 	if settings == nil {
 		return dto.SoraS3Settings{}
