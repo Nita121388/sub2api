@@ -17,6 +17,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
+	"github.com/Wei-Shaw/sub2api/ent/requestlog"
 	"github.com/Wei-Shaw/sub2api/ent/schema"
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
@@ -683,6 +684,74 @@ func init() {
 	redeemcodeDescValidityDays := redeemcodeFields[9].Descriptor()
 	// redeemcode.DefaultValidityDays holds the default value on creation for the validity_days field.
 	redeemcode.DefaultValidityDays = redeemcodeDescValidityDays.Default.(int)
+	requestlogFields := schema.RequestLog{}.Fields()
+	_ = requestlogFields
+	// requestlogDescRequestID is the schema descriptor for request_id field.
+	requestlogDescRequestID := requestlogFields[2].Descriptor()
+	// requestlog.RequestIDValidator is a validator for the "request_id" field. It is called by the builders before save.
+	requestlog.RequestIDValidator = requestlogDescRequestID.Validators[0].(func(string) error)
+	// requestlogDescModel is the schema descriptor for model field.
+	requestlogDescModel := requestlogFields[3].Descriptor()
+	// requestlog.ModelValidator is a validator for the "model" field. It is called by the builders before save.
+	requestlog.ModelValidator = func() func(string) error {
+		validators := requestlogDescModel.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(model string) error {
+			for _, fn := range fns {
+				if err := fn(model); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// requestlogDescInboundEndpoint is the schema descriptor for inbound_endpoint field.
+	requestlogDescInboundEndpoint := requestlogFields[4].Descriptor()
+	// requestlog.InboundEndpointValidator is a validator for the "inbound_endpoint" field. It is called by the builders before save.
+	requestlog.InboundEndpointValidator = requestlogDescInboundEndpoint.Validators[0].(func(string) error)
+	// requestlogDescUpstreamEndpoint is the schema descriptor for upstream_endpoint field.
+	requestlogDescUpstreamEndpoint := requestlogFields[5].Descriptor()
+	// requestlog.UpstreamEndpointValidator is a validator for the "upstream_endpoint" field. It is called by the builders before save.
+	requestlog.UpstreamEndpointValidator = requestlogDescUpstreamEndpoint.Validators[0].(func(string) error)
+	// requestlogDescMethod is the schema descriptor for method field.
+	requestlogDescMethod := requestlogFields[6].Descriptor()
+	// requestlog.MethodValidator is a validator for the "method" field. It is called by the builders before save.
+	requestlog.MethodValidator = requestlogDescMethod.Validators[0].(func(string) error)
+	// requestlogDescErrorCode is the schema descriptor for error_code field.
+	requestlogDescErrorCode := requestlogFields[8].Descriptor()
+	// requestlog.ErrorCodeValidator is a validator for the "error_code" field. It is called by the builders before save.
+	requestlog.ErrorCodeValidator = requestlogDescErrorCode.Validators[0].(func(string) error)
+	// requestlogDescInputTokens is the schema descriptor for input_tokens field.
+	requestlogDescInputTokens := requestlogFields[10].Descriptor()
+	// requestlog.DefaultInputTokens holds the default value on creation for the input_tokens field.
+	requestlog.DefaultInputTokens = requestlogDescInputTokens.Default.(int)
+	// requestlogDescOutputTokens is the schema descriptor for output_tokens field.
+	requestlogDescOutputTokens := requestlogFields[11].Descriptor()
+	// requestlog.DefaultOutputTokens holds the default value on creation for the output_tokens field.
+	requestlog.DefaultOutputTokens = requestlogDescOutputTokens.Default.(int)
+	// requestlogDescTotalCost is the schema descriptor for total_cost field.
+	requestlogDescTotalCost := requestlogFields[12].Descriptor()
+	// requestlog.DefaultTotalCost holds the default value on creation for the total_cost field.
+	requestlog.DefaultTotalCost = requestlogDescTotalCost.Default.(float64)
+	// requestlogDescStream is the schema descriptor for stream field.
+	requestlogDescStream := requestlogFields[13].Descriptor()
+	// requestlog.DefaultStream holds the default value on creation for the stream field.
+	requestlog.DefaultStream = requestlogDescStream.Default.(bool)
+	// requestlogDescUserAgent is the schema descriptor for user_agent field.
+	requestlogDescUserAgent := requestlogFields[16].Descriptor()
+	// requestlog.UserAgentValidator is a validator for the "user_agent" field. It is called by the builders before save.
+	requestlog.UserAgentValidator = requestlogDescUserAgent.Validators[0].(func(string) error)
+	// requestlogDescIPAddress is the schema descriptor for ip_address field.
+	requestlogDescIPAddress := requestlogFields[17].Descriptor()
+	// requestlog.IPAddressValidator is a validator for the "ip_address" field. It is called by the builders before save.
+	requestlog.IPAddressValidator = requestlogDescIPAddress.Validators[0].(func(string) error)
+	// requestlogDescCreatedAt is the schema descriptor for created_at field.
+	requestlogDescCreatedAt := requestlogFields[18].Descriptor()
+	// requestlog.DefaultCreatedAt holds the default value on creation for the created_at field.
+	requestlog.DefaultCreatedAt = requestlogDescCreatedAt.Default.(func() time.Time)
 	securitysecretMixin := schema.SecuritySecret{}.Mixin()
 	securitysecretMixinFields0 := securitysecretMixin[0].Fields()
 	_ = securitysecretMixinFields0

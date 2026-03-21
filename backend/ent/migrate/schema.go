@@ -646,6 +646,91 @@ var (
 			},
 		},
 	}
+	// RequestLogsColumns holds the columns for the "request_logs" table.
+	RequestLogsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "request_id", Type: field.TypeString, Nullable: true, Size: 64},
+		{Name: "model", Type: field.TypeString, Size: 100},
+		{Name: "inbound_endpoint", Type: field.TypeString, Nullable: true, Size: 128},
+		{Name: "upstream_endpoint", Type: field.TypeString, Nullable: true, Size: 128},
+		{Name: "method", Type: field.TypeString, Nullable: true, Size: 8},
+		{Name: "status_code", Type: field.TypeInt, Nullable: true},
+		{Name: "error_code", Type: field.TypeString, Nullable: true, Size: 64},
+		{Name: "error_message", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "input_tokens", Type: field.TypeInt, Default: 0},
+		{Name: "output_tokens", Type: field.TypeInt, Default: 0},
+		{Name: "total_cost", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
+		{Name: "stream", Type: field.TypeBool, Default: false},
+		{Name: "duration_ms", Type: field.TypeInt, Nullable: true},
+		{Name: "first_token_ms", Type: field.TypeInt, Nullable: true},
+		{Name: "user_agent", Type: field.TypeString, Nullable: true, Size: 512},
+		{Name: "ip_address", Type: field.TypeString, Nullable: true, Size: 45},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "api_key_id", Type: field.TypeInt64},
+		{Name: "user_id", Type: field.TypeInt64},
+	}
+	// RequestLogsTable holds the schema information for the "request_logs" table.
+	RequestLogsTable = &schema.Table{
+		Name:       "request_logs",
+		Columns:    RequestLogsColumns,
+		PrimaryKey: []*schema.Column{RequestLogsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "request_logs_api_keys_request_logs",
+				Columns:    []*schema.Column{RequestLogsColumns[18]},
+				RefColumns: []*schema.Column{APIKeysColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "request_logs_users_request_logs",
+				Columns:    []*schema.Column{RequestLogsColumns[19]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "requestlog_user_id",
+				Unique:  false,
+				Columns: []*schema.Column{RequestLogsColumns[19]},
+			},
+			{
+				Name:    "requestlog_api_key_id",
+				Unique:  false,
+				Columns: []*schema.Column{RequestLogsColumns[18]},
+			},
+			{
+				Name:    "requestlog_request_id",
+				Unique:  false,
+				Columns: []*schema.Column{RequestLogsColumns[1]},
+			},
+			{
+				Name:    "requestlog_model",
+				Unique:  false,
+				Columns: []*schema.Column{RequestLogsColumns[2]},
+			},
+			{
+				Name:    "requestlog_status_code",
+				Unique:  false,
+				Columns: []*schema.Column{RequestLogsColumns[6]},
+			},
+			{
+				Name:    "requestlog_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{RequestLogsColumns[17]},
+			},
+			{
+				Name:    "requestlog_user_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{RequestLogsColumns[19], RequestLogsColumns[17]},
+			},
+			{
+				Name:    "requestlog_api_key_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{RequestLogsColumns[18], RequestLogsColumns[17]},
+			},
+		},
+	}
 	// SecuritySecretsColumns holds the columns for the "security_secrets" table.
 	SecuritySecretsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -1109,6 +1194,7 @@ var (
 		PromoCodeUsagesTable,
 		ProxiesTable,
 		RedeemCodesTable,
+		RequestLogsTable,
 		SecuritySecretsTable,
 		SettingsTable,
 		UsageCleanupTasksTable,
@@ -1168,6 +1254,11 @@ func init() {
 	RedeemCodesTable.ForeignKeys[1].RefTable = UsersTable
 	RedeemCodesTable.Annotation = &entsql.Annotation{
 		Table: "redeem_codes",
+	}
+	RequestLogsTable.ForeignKeys[0].RefTable = APIKeysTable
+	RequestLogsTable.ForeignKeys[1].RefTable = UsersTable
+	RequestLogsTable.Annotation = &entsql.Annotation{
+		Table: "request_logs",
 	}
 	SecuritySecretsTable.Annotation = &entsql.Annotation{
 		Table: "security_secrets",

@@ -27,6 +27,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
+	"github.com/Wei-Shaw/sub2api/ent/requestlog"
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
@@ -69,6 +70,8 @@ type Client struct {
 	Proxy *ProxyClient
 	// RedeemCode is the client for interacting with the RedeemCode builders.
 	RedeemCode *RedeemCodeClient
+	// RequestLog is the client for interacting with the RequestLog builders.
+	RequestLog *RequestLogClient
 	// SecuritySecret is the client for interacting with the SecuritySecret builders.
 	SecuritySecret *SecuritySecretClient
 	// Setting is the client for interacting with the Setting builders.
@@ -110,6 +113,7 @@ func (c *Client) init() {
 	c.PromoCodeUsage = NewPromoCodeUsageClient(c.config)
 	c.Proxy = NewProxyClient(c.config)
 	c.RedeemCode = NewRedeemCodeClient(c.config)
+	c.RequestLog = NewRequestLogClient(c.config)
 	c.SecuritySecret = NewSecuritySecretClient(c.config)
 	c.Setting = NewSettingClient(c.config)
 	c.UsageCleanupTask = NewUsageCleanupTaskClient(c.config)
@@ -223,6 +227,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		PromoCodeUsage:          NewPromoCodeUsageClient(cfg),
 		Proxy:                   NewProxyClient(cfg),
 		RedeemCode:              NewRedeemCodeClient(cfg),
+		RequestLog:              NewRequestLogClient(cfg),
 		SecuritySecret:          NewSecuritySecretClient(cfg),
 		Setting:                 NewSettingClient(cfg),
 		UsageCleanupTask:        NewUsageCleanupTaskClient(cfg),
@@ -263,6 +268,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		PromoCodeUsage:          NewPromoCodeUsageClient(cfg),
 		Proxy:                   NewProxyClient(cfg),
 		RedeemCode:              NewRedeemCodeClient(cfg),
+		RequestLog:              NewRequestLogClient(cfg),
 		SecuritySecret:          NewSecuritySecretClient(cfg),
 		Setting:                 NewSettingClient(cfg),
 		UsageCleanupTask:        NewUsageCleanupTaskClient(cfg),
@@ -303,8 +309,8 @@ func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
 		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord, c.PromoCode,
-		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
-		c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
+		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.RequestLog, c.SecuritySecret,
+		c.Setting, c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
 		c.UserAttributeDefinition, c.UserAttributeValue, c.UserSubscription,
 	} {
 		n.Use(hooks...)
@@ -317,8 +323,8 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
 		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord, c.PromoCode,
-		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
-		c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
+		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.RequestLog, c.SecuritySecret,
+		c.Setting, c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
 		c.UserAttributeDefinition, c.UserAttributeValue, c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
@@ -352,6 +358,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Proxy.mutate(ctx, m)
 	case *RedeemCodeMutation:
 		return c.RedeemCode.mutate(ctx, m)
+	case *RequestLogMutation:
+		return c.RequestLog.mutate(ctx, m)
 	case *SecuritySecretMutation:
 		return c.SecuritySecret.mutate(ctx, m)
 	case *SettingMutation:
@@ -524,6 +532,22 @@ func (c *APIKeyClient) QueryUsageLogs(_m *APIKey) *UsageLogQuery {
 			sqlgraph.From(apikey.Table, apikey.FieldID, id),
 			sqlgraph.To(usagelog.Table, usagelog.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, apikey.UsageLogsTable, apikey.UsageLogsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryRequestLogs queries the request_logs edge of a APIKey.
+func (c *APIKeyClient) QueryRequestLogs(_m *APIKey) *RequestLogQuery {
+	query := (&RequestLogClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(apikey.Table, apikey.FieldID, id),
+			sqlgraph.To(requestlog.Table, requestlog.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, apikey.RequestLogsTable, apikey.RequestLogsColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -2346,6 +2370,171 @@ func (c *RedeemCodeClient) mutate(ctx context.Context, m *RedeemCodeMutation) (V
 	}
 }
 
+// RequestLogClient is a client for the RequestLog schema.
+type RequestLogClient struct {
+	config
+}
+
+// NewRequestLogClient returns a client for the RequestLog from the given config.
+func NewRequestLogClient(c config) *RequestLogClient {
+	return &RequestLogClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `requestlog.Hooks(f(g(h())))`.
+func (c *RequestLogClient) Use(hooks ...Hook) {
+	c.hooks.RequestLog = append(c.hooks.RequestLog, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `requestlog.Intercept(f(g(h())))`.
+func (c *RequestLogClient) Intercept(interceptors ...Interceptor) {
+	c.inters.RequestLog = append(c.inters.RequestLog, interceptors...)
+}
+
+// Create returns a builder for creating a RequestLog entity.
+func (c *RequestLogClient) Create() *RequestLogCreate {
+	mutation := newRequestLogMutation(c.config, OpCreate)
+	return &RequestLogCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of RequestLog entities.
+func (c *RequestLogClient) CreateBulk(builders ...*RequestLogCreate) *RequestLogCreateBulk {
+	return &RequestLogCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *RequestLogClient) MapCreateBulk(slice any, setFunc func(*RequestLogCreate, int)) *RequestLogCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &RequestLogCreateBulk{err: fmt.Errorf("calling to RequestLogClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*RequestLogCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &RequestLogCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for RequestLog.
+func (c *RequestLogClient) Update() *RequestLogUpdate {
+	mutation := newRequestLogMutation(c.config, OpUpdate)
+	return &RequestLogUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *RequestLogClient) UpdateOne(_m *RequestLog) *RequestLogUpdateOne {
+	mutation := newRequestLogMutation(c.config, OpUpdateOne, withRequestLog(_m))
+	return &RequestLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *RequestLogClient) UpdateOneID(id int64) *RequestLogUpdateOne {
+	mutation := newRequestLogMutation(c.config, OpUpdateOne, withRequestLogID(id))
+	return &RequestLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for RequestLog.
+func (c *RequestLogClient) Delete() *RequestLogDelete {
+	mutation := newRequestLogMutation(c.config, OpDelete)
+	return &RequestLogDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *RequestLogClient) DeleteOne(_m *RequestLog) *RequestLogDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *RequestLogClient) DeleteOneID(id int64) *RequestLogDeleteOne {
+	builder := c.Delete().Where(requestlog.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &RequestLogDeleteOne{builder}
+}
+
+// Query returns a query builder for RequestLog.
+func (c *RequestLogClient) Query() *RequestLogQuery {
+	return &RequestLogQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeRequestLog},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a RequestLog entity by its id.
+func (c *RequestLogClient) Get(ctx context.Context, id int64) (*RequestLog, error) {
+	return c.Query().Where(requestlog.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *RequestLogClient) GetX(ctx context.Context, id int64) *RequestLog {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryUser queries the user edge of a RequestLog.
+func (c *RequestLogClient) QueryUser(_m *RequestLog) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(requestlog.Table, requestlog.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, requestlog.UserTable, requestlog.UserColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryAPIKey queries the api_key edge of a RequestLog.
+func (c *RequestLogClient) QueryAPIKey(_m *RequestLog) *APIKeyQuery {
+	query := (&APIKeyClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(requestlog.Table, requestlog.FieldID, id),
+			sqlgraph.To(apikey.Table, apikey.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, requestlog.APIKeyTable, requestlog.APIKeyColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *RequestLogClient) Hooks() []Hook {
+	return c.hooks.RequestLog
+}
+
+// Interceptors returns the client interceptors.
+func (c *RequestLogClient) Interceptors() []Interceptor {
+	return c.inters.RequestLog
+}
+
+func (c *RequestLogClient) mutate(ctx context.Context, m *RequestLogMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&RequestLogCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&RequestLogUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&RequestLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&RequestLogDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown RequestLog mutation op: %q", m.Op())
+	}
+}
+
 // SecuritySecretClient is a client for the SecuritySecret schema.
 type SecuritySecretClient struct {
 	config
@@ -3178,6 +3367,22 @@ func (c *UserClient) QueryUsageLogs(_m *User) *UsageLogQuery {
 	return query
 }
 
+// QueryRequestLogs queries the request_logs edge of a User.
+func (c *UserClient) QueryRequestLogs(_m *User) *RequestLogQuery {
+	query := (&RequestLogClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(requestlog.Table, requestlog.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.RequestLogsTable, user.RequestLogsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // QueryAttributeValues queries the attribute_values edge of a User.
 func (c *UserClient) QueryAttributeValues(_m *User) *UserAttributeValueQuery {
 	query := (&UserAttributeValueClient{config: c.config}).Query()
@@ -3889,15 +4094,15 @@ type (
 	hooks struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead,
 		ErrorPassthroughRule, Group, IdempotencyRecord, PromoCode, PromoCodeUsage,
-		Proxy, RedeemCode, SecuritySecret, Setting, UsageCleanupTask, UsageLog, User,
-		UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
+		Proxy, RedeemCode, RequestLog, SecuritySecret, Setting, UsageCleanupTask,
+		UsageLog, User, UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
 		UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead,
 		ErrorPassthroughRule, Group, IdempotencyRecord, PromoCode, PromoCodeUsage,
-		Proxy, RedeemCode, SecuritySecret, Setting, UsageCleanupTask, UsageLog, User,
-		UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
+		Proxy, RedeemCode, RequestLog, SecuritySecret, Setting, UsageCleanupTask,
+		UsageLog, User, UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
 		UserSubscription []ent.Interceptor
 	}
 )
