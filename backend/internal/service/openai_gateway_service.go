@@ -305,6 +305,7 @@ var defaultOpenAICodexSnapshotPersistThrottle = newAccountWriteThrottle(openAICo
 type OpenAIGatewayService struct {
 	accountRepo           AccountRepository
 	usageLogRepo          UsageLogRepository
+	requestLogRepo        RequestLogRepository
 	usageBillingRepo      UsageBillingRepository
 	userRepo              UserRepository
 	userSubRepo           UserSubscriptionRepository
@@ -389,6 +390,13 @@ func NewOpenAIGatewayService(
 	}
 	svc.logOpenAIWSModeBootstrap()
 	return svc
+}
+
+func (s *OpenAIGatewayService) SetRequestLogRepository(repo RequestLogRepository) {
+	if s == nil {
+		return
+	}
+	s.requestLogRepo = repo
 }
 
 func (s *OpenAIGatewayService) getCodexSnapshotThrottle() *accountWriteThrottle {
@@ -4165,6 +4173,22 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		FirstTokenMs:          result.FirstTokenMs,
 		CreatedAt:             time.Now(),
 	}
+	requestLog := newSuccessRequestLog(
+		user.ID,
+		apiKey.ID,
+		requestID,
+		result.Model,
+		input.InboundEndpoint,
+		input.UpstreamEndpoint,
+		input.UserAgent,
+		input.IPAddress,
+		result.Stream,
+		&durationMs,
+		result.FirstTokenMs,
+		actualInputTokens,
+		result.Usage.OutputTokens,
+		cost.TotalCost,
+	)
 	// 添加 UserAgent
 	if input.UserAgent != "" {
 		usageLog.UserAgent = &input.UserAgent
@@ -4184,6 +4208,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 
 	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
 		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
+		writeRequestLogBestEffort(ctx, s.requestLogRepo, requestLog, "service.openai_gateway")
 		logger.LegacyPrintf("service.openai_gateway", "[SIMPLE MODE] Usage recorded (not billed): user=%d, tokens=%d", usageLog.UserID, usageLog.TotalTokens())
 		s.deferredService.ScheduleLastUsedUpdate(account.ID)
 		return nil
@@ -4208,6 +4233,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		return billingErr
 	}
 	writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
+	writeRequestLogBestEffort(ctx, s.requestLogRepo, requestLog, "service.openai_gateway")
 
 	return nil
 }

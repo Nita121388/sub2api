@@ -111,6 +111,47 @@ func TestGatewayServiceRecordUsage_BillingUsesDetachedContext(t *testing.T) {
 	require.NoError(t, quotaSvc.lastQuotaCtxErr)
 }
 
+func TestGatewayServiceRecordUsage_WritesRequestLogMetadata(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	requestRepo := &openAIRequestLogRepoStub{}
+	svc := newGatewayRecordUsageServiceForTest(usageRepo, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{})
+	svc.requestLogRepo = requestRepo
+
+	err := svc.RecordUsage(context.Background(), &RecordUsageInput{
+		Result: &ForwardResult{
+			RequestID: "gateway_request_log",
+			Usage: ClaudeUsage{
+				InputTokens:  10,
+				OutputTokens: 6,
+			},
+			Model:        "claude-sonnet-4",
+			Stream:       true,
+			Duration:     time.Second,
+			FirstTokenMs: func() *int { v := 120; return &v }(),
+		},
+		APIKey:           &APIKey{ID: 501, Quota: 100},
+		User:             &User{ID: 601},
+		Account:          &Account{ID: 701},
+		InboundEndpoint:  "/v1/messages",
+		UpstreamEndpoint: "/v1/messages",
+		UserAgent:        "claude-client",
+		IPAddress:        "10.0.0.1",
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, 1, requestRepo.bestEffortCalls)
+	require.NotNil(t, requestRepo.lastLog)
+	require.Equal(t, "claude-sonnet-4", requestRepo.lastLog.Model)
+	require.Equal(t, 10, requestRepo.lastLog.InputTokens)
+	require.Equal(t, 6, requestRepo.lastLog.OutputTokens)
+	require.NotNil(t, requestRepo.lastLog.Method)
+	require.Equal(t, "POST", *requestRepo.lastLog.Method)
+	require.NotNil(t, requestRepo.lastLog.StatusCode)
+	require.Equal(t, 200, *requestRepo.lastLog.StatusCode)
+	require.NotNil(t, requestRepo.lastLog.IPAddress)
+	require.Equal(t, "10.0.0.1", *requestRepo.lastLog.IPAddress)
+}
+
 func TestGatewayServiceRecordUsage_BillingFingerprintIncludesRequestPayloadHash(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{}
 	billingRepo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}}

@@ -536,6 +536,7 @@ type GatewayService struct {
 	accountRepo           AccountRepository
 	groupRepo             GroupRepository
 	usageLogRepo          UsageLogRepository
+	requestLogRepo        RequestLogRepository
 	usageBillingRepo      UsageBillingRepository
 	userRepo              UserRepository
 	userSubRepo           UserSubscriptionRepository
@@ -631,6 +632,13 @@ func NewGatewayService(
 	svc.debugModelRouting.Store(parseDebugEnvBool(os.Getenv("SUB2API_DEBUG_MODEL_ROUTING")))
 	svc.debugClaudeMimic.Store(parseDebugEnvBool(os.Getenv("SUB2API_DEBUG_CLAUDE_MIMIC")))
 	return svc
+}
+
+func (s *GatewayService) SetRequestLogRepository(repo RequestLogRepository) {
+	if s == nil {
+		return
+	}
+	s.requestLogRepo = repo
 }
 
 // GenerateSessionHash 从预解析请求计算粘性会话 hash
@@ -7617,6 +7625,22 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 		CacheTTLOverridden:    cacheTTLOverridden,
 		CreatedAt:             time.Now(),
 	}
+	requestLog := newSuccessRequestLog(
+		user.ID,
+		apiKey.ID,
+		requestID,
+		result.Model,
+		input.InboundEndpoint,
+		input.UpstreamEndpoint,
+		input.UserAgent,
+		input.IPAddress,
+		result.Stream,
+		&durationMs,
+		result.FirstTokenMs,
+		result.Usage.InputTokens,
+		result.Usage.OutputTokens,
+		cost.TotalCost,
+	)
 
 	// 添加 UserAgent
 	if input.UserAgent != "" {
@@ -7638,6 +7662,7 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 
 	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
 		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
+		writeRequestLogBestEffort(ctx, s.requestLogRepo, requestLog, "service.gateway")
 		logger.LegacyPrintf("service.gateway", "[SIMPLE MODE] Usage recorded (not billed): user=%d, tokens=%d", usageLog.UserID, usageLog.TotalTokens())
 		s.deferredService.ScheduleLastUsedUpdate(account.ID)
 		return nil
@@ -7662,6 +7687,7 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 		return billingErr
 	}
 	writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
+	writeRequestLogBestEffort(ctx, s.requestLogRepo, requestLog, "service.gateway")
 
 	return nil
 }
@@ -7800,6 +7826,22 @@ func (s *GatewayService) RecordUsageWithLongContext(ctx context.Context, input *
 		CacheTTLOverridden:    cacheTTLOverridden,
 		CreatedAt:             time.Now(),
 	}
+	requestLog := newSuccessRequestLog(
+		user.ID,
+		apiKey.ID,
+		requestID,
+		result.Model,
+		input.InboundEndpoint,
+		input.UpstreamEndpoint,
+		input.UserAgent,
+		input.IPAddress,
+		result.Stream,
+		&durationMs,
+		result.FirstTokenMs,
+		result.Usage.InputTokens,
+		result.Usage.OutputTokens,
+		cost.TotalCost,
+	)
 
 	// 添加 UserAgent
 	if input.UserAgent != "" {
@@ -7821,6 +7863,7 @@ func (s *GatewayService) RecordUsageWithLongContext(ctx context.Context, input *
 
 	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
 		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
+		writeRequestLogBestEffort(ctx, s.requestLogRepo, requestLog, "service.gateway")
 		logger.LegacyPrintf("service.gateway", "[SIMPLE MODE] Usage recorded (not billed): user=%d, tokens=%d", usageLog.UserID, usageLog.TotalTokens())
 		s.deferredService.ScheduleLastUsedUpdate(account.ID)
 		return nil
@@ -7845,6 +7888,7 @@ func (s *GatewayService) RecordUsageWithLongContext(ctx context.Context, input *
 		return billingErr
 	}
 	writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
+	writeRequestLogBestEffort(ctx, s.requestLogRepo, requestLog, "service.gateway")
 
 	return nil
 }

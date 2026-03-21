@@ -29,6 +29,31 @@ func (s *openAIRecordUsageLogRepoStub) Create(ctx context.Context, log *UsageLog
 	return s.inserted, s.err
 }
 
+type openAIRequestLogRepoStub struct {
+	RequestLogRepository
+
+	createErr       error
+	bestEffortErr   error
+	createCalls     int
+	bestEffortCalls int
+	lastLog         *RequestLog
+	lastCtxErr      error
+}
+
+func (s *openAIRequestLogRepoStub) Create(ctx context.Context, log *RequestLog) error {
+	s.createCalls++
+	s.lastLog = log
+	s.lastCtxErr = ctx.Err()
+	return s.createErr
+}
+
+func (s *openAIRequestLogRepoStub) CreateBestEffort(ctx context.Context, log *RequestLog) error {
+	s.bestEffortCalls++
+	s.lastLog = log
+	s.lastCtxErr = ctx.Err()
+	return s.bestEffortErr
+}
+
 type openAIRecordUsageBillingRepoStub struct {
 	UsageBillingRepository
 
@@ -259,6 +284,55 @@ func TestOpenAIGatewayServiceRecordUsage_IncludesEndpointMetadata(t *testing.T) 
 	require.Equal(t, "/v1/chat/completions", *usageRepo.lastLog.InboundEndpoint)
 	require.NotNil(t, usageRepo.lastLog.UpstreamEndpoint)
 	require.Equal(t, "/v1/responses", *usageRepo.lastLog.UpstreamEndpoint)
+}
+
+func TestOpenAIGatewayServiceRecordUsage_WritesRequestLogMetadata(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	requestRepo := &openAIRequestLogRepoStub{}
+	svc := newOpenAIRecordUsageServiceForTest(usageRepo, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{}, nil)
+	svc.requestLogRepo = requestRepo
+
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID:    "resp_request_log",
+			Model:        "gpt-5.4",
+			BillingModel: "gpt-5.4-mini",
+			Usage: OpenAIUsage{
+				InputTokens:          20,
+				OutputTokens:         7,
+				CacheReadInputTokens: 5,
+			},
+			Stream:       true,
+			Duration:     time.Second,
+			FirstTokenMs: func() *int { v := 88; return &v }(),
+		},
+		APIKey:           &APIKey{ID: 101},
+		User:             &User{ID: 202},
+		Account:          &Account{ID: 303},
+		InboundEndpoint:  "/v1/responses",
+		UpstreamEndpoint: "/v1/responses",
+		UserAgent:        "test-openai",
+		IPAddress:        "127.0.0.1",
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, 1, requestRepo.bestEffortCalls)
+	require.NotNil(t, requestRepo.lastLog)
+	require.Equal(t, int64(202), requestRepo.lastLog.UserID)
+	require.Equal(t, int64(101), requestRepo.lastLog.APIKeyID)
+	require.NotNil(t, requestRepo.lastLog.RequestID)
+	require.Equal(t, "resp_request_log", *requestRepo.lastLog.RequestID)
+	require.Equal(t, "gpt-5.4", requestRepo.lastLog.Model)
+	require.NotNil(t, requestRepo.lastLog.Method)
+	require.Equal(t, "POST", *requestRepo.lastLog.Method)
+	require.NotNil(t, requestRepo.lastLog.StatusCode)
+	require.Equal(t, 200, *requestRepo.lastLog.StatusCode)
+	require.Equal(t, 15, requestRepo.lastLog.InputTokens)
+	require.Equal(t, 7, requestRepo.lastLog.OutputTokens)
+	require.NotNil(t, requestRepo.lastLog.InboundEndpoint)
+	require.Equal(t, "/v1/responses", *requestRepo.lastLog.InboundEndpoint)
+	require.NotNil(t, requestRepo.lastLog.UserAgent)
+	require.Equal(t, "test-openai", *requestRepo.lastLog.UserAgent)
 }
 
 func TestOpenAIGatewayServiceRecordUsage_FallsBackToGroupDefaultRateOnResolverError(t *testing.T) {
