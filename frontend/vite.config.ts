@@ -113,15 +113,43 @@ export default defineConfig(({ mode }) => {
       proxy: {
         '/api': {
           target: backendUrl,
-          changeOrigin: true
+          changeOrigin: true,
+          ws: true
+        },
+        '/responses': {
+          target: backendUrl,
+          changeOrigin: true,
+          ws: true
+        },
+        '/chat/completions': {
+          target: backendUrl,
+          changeOrigin: true,
+          ws: true
         },
         '/v1': {
           target: backendUrl,
-          changeOrigin: true
+          changeOrigin: true,
+          ws: true
+        },
+        '/v1beta': {
+          target: backendUrl,
+          changeOrigin: true,
+          ws: true
+        },
+        '/antigravity': {
+          target: backendUrl,
+          changeOrigin: true,
+          ws: true
+        },
+        '/sora': {
+          target: backendUrl,
+          changeOrigin: true,
+          ws: true
         },
         '/setup': {
           target: backendUrl,
-          changeOrigin: true
+          changeOrigin: true,
+          ws: true
         }
       }
     }

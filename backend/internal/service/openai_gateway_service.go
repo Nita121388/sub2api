@@ -2255,6 +2255,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			}
 			usage = streamResult.usage
 			firstTokenMs = streamResult.firstTokenMs
+			responseBody = streamResult.responseBody
 		} else {
 			usage, responseBody, err = s.handleNonStreamingResponse(ctx, resp, c, account, originalModel, mappedModel)
 			if err != nil {
@@ -2422,6 +2423,7 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		}
 		usage = result.usage
 		firstTokenMs = result.firstTokenMs
+		responseBody = result.responseBody
 	} else {
 		usage, responseBody, err = s.handleNonStreamingResponsePassthrough(ctx, resp, c)
 		if err != nil {
@@ -2685,6 +2687,7 @@ func collectOpenAIPassthroughTimeoutHeaders(h http.Header) []string {
 type openaiStreamingResultPassthrough struct {
 	usage        *OpenAIUsage
 	firstTokenMs *int
+	responseBody []byte
 }
 
 func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
@@ -2716,6 +2719,7 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 	clientDisconnected := false
 	sawDone := false
 	sawTerminalEvent := false
+	var finalResponseBody []byte
 	upstreamRequestID := strings.TrimSpace(resp.Header.Get("x-request-id"))
 
 	scanner := bufio.NewScanner(resp.Body)
@@ -2737,6 +2741,9 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 			}
 			if openAIStreamEventIsTerminal(trimmedData) {
 				sawTerminalEvent = true
+				if responseBody := extractOpenAITerminalResponseBodyFromSSEData(dataBytes); len(responseBody) > 0 {
+					finalResponseBody = responseBody
+				}
 			}
 			if firstTokenMs == nil && trimmedData != "" && trimmedData != "[DONE]" {
 				ms := int(time.Since(startTime).Milliseconds())
@@ -2756,17 +2763,17 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 	}
 	if err := scanner.Err(); err != nil {
 		if sawTerminalEvent {
-			return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs}, nil
+			return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs, responseBody: finalResponseBody}, nil
 		}
 		if clientDisconnected {
-			return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs}, fmt.Errorf("stream usage incomplete after disconnect: %w", err)
+			return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs, responseBody: finalResponseBody}, fmt.Errorf("stream usage incomplete after disconnect: %w", err)
 		}
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs}, fmt.Errorf("stream usage incomplete: %w", err)
+			return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs, responseBody: finalResponseBody}, fmt.Errorf("stream usage incomplete: %w", err)
 		}
 		if errors.Is(err, bufio.ErrTooLong) {
 			logger.LegacyPrintf("service.openai_gateway", "[OpenAI passthrough] SSE line too long: account=%d max_size=%d error=%v", account.ID, maxLineSize, err)
-			return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs}, err
+			return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs, responseBody: finalResponseBody}, err
 		}
 		logger.LegacyPrintf("service.openai_gateway",
 			"[OpenAI passthrough] 流读取异常中断: account=%d request_id=%s err=%v",
@@ -2774,7 +2781,7 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 			upstreamRequestID,
 			err,
 		)
-		return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs}, fmt.Errorf("stream read error: %w", err)
+		return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs, responseBody: finalResponseBody}, fmt.Errorf("stream read error: %w", err)
 	}
 	if !clientDisconnected && !sawDone && !sawTerminalEvent && ctx.Err() == nil {
 		logger.FromContext(ctx).With(
@@ -2782,10 +2789,10 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 			zap.Int64("account_id", account.ID),
 			zap.String("upstream_request_id", upstreamRequestID),
 		).Info("OpenAI passthrough 上游流在未收到 [DONE] 时结束，疑似断流")
-		return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs}, errors.New("stream usage incomplete: missing terminal event")
+		return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs, responseBody: finalResponseBody}, errors.New("stream usage incomplete: missing terminal event")
 	}
 
-	return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs}, nil
+	return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs, responseBody: finalResponseBody}, nil
 }
 
 func (s *OpenAIGatewayService) handleNonStreamingResponsePassthrough(
@@ -3242,6 +3249,7 @@ func (s *OpenAIGatewayService) handleCompatErrorResponse(
 type openaiStreamingResult struct {
 	usage        *OpenAIUsage
 	firstTokenMs *int
+	responseBody []byte
 }
 
 func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, startTime time.Time, originalModel, mappedModel string) (*openaiStreamingResult, error) {
@@ -3342,8 +3350,17 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 	}
 
 	needModelReplace := originalModel != mappedModel
+	var terminalResponseBody []byte
 	resultWithUsage := func() *openaiStreamingResult {
-		return &openaiStreamingResult{usage: usage, firstTokenMs: firstTokenMs}
+		var responseBodyCopy []byte
+		if len(terminalResponseBody) > 0 {
+			responseBodyCopy = append([]byte(nil), terminalResponseBody...)
+		}
+		return &openaiStreamingResult{
+			usage:        usage,
+			firstTokenMs: firstTokenMs,
+			responseBody: responseBodyCopy,
+		}
 	}
 	finalizeStream := func() (*openaiStreamingResult, error) {
 		if !clientDisconnected {
@@ -3404,6 +3421,9 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 				dataBytes = correctedData
 				data = string(correctedData)
 				line = "data: " + data
+			}
+			if responseBody := extractOpenAITerminalResponseBodyFromSSEData(dataBytes); len(responseBody) > 0 {
+				terminalResponseBody = responseBody
 			}
 
 			// 写入客户端（客户端断开后继续 drain 上游）
@@ -3608,6 +3628,23 @@ func (s *OpenAIGatewayService) parseSSEUsage(data string, usage *OpenAIUsage) {
 	s.parseSSEUsageBytes([]byte(data), usage)
 }
 
+func extractOpenAITerminalResponseBodyFromSSEData(data []byte) []byte {
+	if len(data) == 0 || !gjson.ValidBytes(data) {
+		return nil
+	}
+	eventType := strings.TrimSpace(gjson.GetBytes(data, "type").String())
+	switch eventType {
+	case "response.completed", "response.done", "response.failed", "response.incomplete":
+	default:
+		return nil
+	}
+	response := gjson.GetBytes(data, "response")
+	if !response.Exists() || response.Type != gjson.JSON || response.Raw == "" {
+		return nil
+	}
+	return []byte(response.Raw)
+}
+
 func (s *OpenAIGatewayService) parseSSEUsageBytes(data []byte, usage *OpenAIUsage) {
 	if usage == nil || len(data) == 0 || bytes.Equal(data, []byte("[DONE]")) {
 		return
@@ -3797,7 +3834,7 @@ func extractCodexFinalResponse(body string) ([]byte, bool) {
 			continue
 		}
 		eventType := gjson.Get(data, "type").String()
-		if eventType == "response.done" || eventType == "response.completed" {
+		if eventType == "response.done" || eventType == "response.completed" || eventType == "response.incomplete" || eventType == "response.failed" {
 			if response := gjson.Get(data, "response"); response.Exists() && response.Type == gjson.JSON && response.Raw != "" {
 				return []byte(response.Raw), true
 			}
@@ -4201,6 +4238,17 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	if s.settingService != nil {
 		if settings, err := s.settingService.GetRequestLogSettings(ctx); err == nil {
 			requestLog.Payload = BuildRequestLogPayload(settings, input.RequestBody, result.ResponseBody)
+			logger.LegacyPrintf(
+				"service.openai_gateway",
+				"[RequestLogDebug] request_id=%s model=%s stream=%v request_body_len=%d response_body_len=%d payload_has_request=%v payload_has_response=%v",
+				requestID,
+				result.Model,
+				result.Stream,
+				len(input.RequestBody),
+				len(result.ResponseBody),
+				requestLog.Payload != nil && requestLog.Payload.RequestBody != nil,
+				requestLog.Payload != nil && requestLog.Payload.ResponseBody != nil,
+			)
 		}
 	}
 	// 添加 UserAgent

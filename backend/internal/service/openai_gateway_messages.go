@@ -262,7 +262,7 @@ func (s *OpenAIGatewayService) handleAnthropicBufferedStreamingResponse(
 		}
 
 		// Terminal events carry the complete ResponsesResponse with output + usage.
-		if (event.Type == "response.completed" || event.Type == "response.incomplete" || event.Type == "response.failed") &&
+		if (event.Type == "response.completed" || event.Type == "response.incomplete" || event.Type == "response.failed" || event.Type == "response.done") &&
 			event.Response != nil {
 			finalResponse = event.Response
 			if event.Response.Usage != nil {
@@ -338,6 +338,7 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 	state.Model = originalModel
 	var usage OpenAIUsage
 	var firstTokenMs *int
+	var finalResponse *apicompat.ResponsesResponse
 	firstChunk := true
 
 	scanner := bufio.NewScanner(resp.Body)
@@ -349,17 +350,23 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 
 	// resultWithUsage builds the final result snapshot.
 	resultWithUsage := func() *OpenAIForwardResult {
-		return &OpenAIForwardResult{
-			RequestID:     requestID,
-			Usage:         usage,
-			Model:         originalModel,
-			BillingModel:  mappedModel,
-			UpstreamModel: mappedModel,
-			Stream:        true,
-			Duration:      time.Since(startTime),
-			FirstTokenMs:  firstTokenMs,
+		var responseBody []byte
+			if finalResponse != nil {
+				anthropicResp := apicompat.ResponsesToAnthropic(finalResponse, originalModel)
+				responseBody, _ = json.Marshal(anthropicResp)
+			}
+			return &OpenAIForwardResult{
+				RequestID:     requestID,
+				Usage:         usage,
+				Model:         originalModel,
+				BillingModel:  mappedModel,
+				UpstreamModel: mappedModel,
+				ResponseBody:  responseBody,
+				Stream:        true,
+				Duration:      time.Since(startTime),
+				FirstTokenMs:  firstTokenMs,
+			}
 		}
-	}
 
 	// processDataLine handles a single "data: ..." SSE line from upstream.
 	// Returns (clientDisconnected bool).
@@ -380,14 +387,17 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 		}
 
 		// Extract usage from completion events
-		if (event.Type == "response.completed" || event.Type == "response.incomplete" || event.Type == "response.failed") &&
-			event.Response != nil && event.Response.Usage != nil {
-			usage = OpenAIUsage{
-				InputTokens:  event.Response.Usage.InputTokens,
-				OutputTokens: event.Response.Usage.OutputTokens,
-			}
-			if event.Response.Usage.InputTokensDetails != nil {
-				usage.CacheReadInputTokens = event.Response.Usage.InputTokensDetails.CachedTokens
+		if (event.Type == "response.completed" || event.Type == "response.incomplete" || event.Type == "response.failed" || event.Type == "response.done") &&
+			event.Response != nil {
+			finalResponse = event.Response
+			if event.Response.Usage != nil {
+				usage = OpenAIUsage{
+					InputTokens:  event.Response.Usage.InputTokens,
+					OutputTokens: event.Response.Usage.OutputTokens,
+				}
+				if event.Response.Usage.InputTokensDetails != nil {
+					usage.CacheReadInputTokens = event.Response.Usage.InputTokensDetails.CachedTokens
+				}
 			}
 		}
 

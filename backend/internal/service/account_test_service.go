@@ -1525,6 +1525,7 @@ func createGeminiTestPayload(modelID string, prompt string) []byte {
 // processGeminiStream processes SSE stream from Gemini API
 func (s *AccountTestService) processGeminiStream(c *gin.Context, body io.Reader) error {
 	reader := bufio.NewReader(body)
+	lastTextSnapshot := ""
 
 	for {
 		line, err := reader.ReadString('\n')
@@ -1560,13 +1561,16 @@ func (s *AccountTestService) processGeminiStream(c *gin.Context, body io.Reader)
 		}
 		if candidates, ok := data["candidates"].([]any); ok && len(candidates) > 0 {
 			if candidate, ok := candidates[0].(map[string]any); ok {
+				currentTextSnapshot := ""
+
 				// Extract content first (before checking completion)
 				if content, ok := candidate["content"].(map[string]any); ok {
 					if parts, ok := content["parts"].([]any); ok {
+						var textBuilder strings.Builder
 						for _, part := range parts {
 							if partMap, ok := part.(map[string]any); ok {
 								if text, ok := partMap["text"].(string); ok && text != "" {
-									s.sendEvent(c, TestEvent{Type: "content", Text: text})
+									textBuilder.WriteString(text)
 								}
 								if inlineData, ok := partMap["inlineData"].(map[string]any); ok {
 									mimeType, _ := inlineData["mimeType"].(string)
@@ -1581,7 +1585,22 @@ func (s *AccountTestService) processGeminiStream(c *gin.Context, body io.Reader)
 								}
 							}
 						}
+						currentTextSnapshot = textBuilder.String()
 					}
+				}
+
+				if currentTextSnapshot != "" {
+					deltaText := currentTextSnapshot
+					switch {
+					case currentTextSnapshot == lastTextSnapshot:
+						deltaText = ""
+					case strings.HasPrefix(currentTextSnapshot, lastTextSnapshot):
+						deltaText = strings.TrimPrefix(currentTextSnapshot, lastTextSnapshot)
+					}
+					if deltaText != "" {
+						s.sendEvent(c, TestEvent{Type: "content", Text: deltaText})
+					}
+					lastTextSnapshot = currentTextSnapshot
 				}
 
 				// Check for completion after extracting content

@@ -2,120 +2,257 @@
   <AppLayout>
     <TablePageLayout>
       <template #filters>
-        <div class="flex flex-wrap-reverse items-start justify-between gap-3">
-          <AccountTableFilters
-            v-model:searchQuery="params.search"
-            :filters="params"
-            :groups="groups"
-            @update:filters="(newFilters) => Object.assign(params, newFilters)"
-            @change="debouncedReload"
-            @update:searchQuery="debouncedReload"
-          />
-          <AccountTableActions
-            :loading="loading"
-            @refresh="handleManualRefresh"
-            @sync="showSync = true"
-            @create="showCreate = true"
-          >
-            <template #after>
-              <!-- Auto Refresh Dropdown -->
-              <div class="relative" ref="autoRefreshDropdownRef">
-                <button
-                  @click="
-                    showAutoRefreshDropdown = !showAutoRefreshDropdown;
-                    showColumnDropdown = false
-                  "
-                  class="btn btn-secondary px-2 md:px-3"
-                  :title="t('admin.accounts.autoRefresh')"
-                >
-                  <Icon name="refresh" size="sm" :class="[autoRefreshEnabled ? 'animate-spin' : '']" />
-                  <span class="hidden md:inline">
-                    {{
-                      autoRefreshEnabled
-                        ? t('admin.accounts.autoRefreshCountdown', { seconds: autoRefreshCountdown })
-                        : t('admin.accounts.autoRefresh')
-                    }}
-                  </span>
-                </button>
-                <div
-                  v-if="showAutoRefreshDropdown"
-                  class="absolute right-0 z-50 mt-2 w-56 origin-top-right rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800"
-                >
-                  <div class="p-2">
-                    <button
-                      @click="setAutoRefreshEnabled(!autoRefreshEnabled)"
-                      class="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
-                    >
-                      <span>{{ t('admin.accounts.enableAutoRefresh') }}</span>
-                      <Icon v-if="autoRefreshEnabled" name="check" size="sm" class="text-primary-500" />
-                    </button>
-                    <div class="my-1 border-t border-gray-100 dark:border-gray-700"></div>
-                    <button
-                      v-for="sec in autoRefreshIntervals"
-                      :key="sec"
-                      @click="setAutoRefreshInterval(sec)"
-                      class="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
-                    >
-                      <span>{{ autoRefreshIntervalLabel(sec) }}</span>
-                      <Icon v-if="autoRefreshIntervalSeconds === sec" name="check" size="sm" class="text-primary-500" />
-                    </button>
-                  </div>
+        <div class="space-y-4">
+          <div class="grid grid-cols-2 gap-3 xl:grid-cols-5">
+            <div
+              v-for="card in accountStatusCards"
+              :key="card.key"
+              class="rounded-2xl border p-4 shadow-sm transition-colors"
+              :class="card.className"
+            >
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
+                    {{ card.label }}
+                  </p>
+                  <p class="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
+                    {{ card.count.toLocaleString() }}
+                  </p>
                 </div>
+                <span class="rounded-full px-2 py-1 text-[11px] font-medium" :class="card.badgeClass">
+                  {{ t('admin.accounts.overview.global') }}
+                </span>
               </div>
+            </div>
+          </div>
 
-              <!-- Error Passthrough Rules -->
-              <button
-                @click="showErrorPassthrough = true"
-                class="btn btn-secondary"
-                :title="t('admin.errorPassthrough.title')"
+          <div class="card p-4">
+            <div class="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+                  {{ t('admin.accounts.overview.groupsTitle') }}
+                </h3>
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.accounts.overview.groupsHint') }}
+                </p>
+              </div>
+              <span class="text-xs text-gray-500 dark:text-gray-400">
+                {{ t('admin.accounts.groupCountTotal', { count: accountGroupCards.length }) }}
+              </span>
+            </div>
+
+            <div
+              v-if="accountGroupCards.length === 0"
+              class="rounded-xl border border-dashed border-gray-200 px-4 py-6 text-sm text-gray-500 dark:border-dark-700 dark:text-gray-400"
+            >
+              {{ t('admin.accounts.overview.noGroupStats') }}
+            </div>
+
+            <div v-else class="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+              <div
+                v-for="group in accountGroupCards"
+                :key="group.id"
+                class="rounded-xl border border-gray-200 bg-gray-50/70 p-3 dark:border-dark-700 dark:bg-dark-900/30"
               >
-                <Icon name="shield" size="md" class="mr-1.5" />
-                <span class="hidden md:inline">{{ t('admin.errorPassthrough.title') }}</span>
-              </button>
+                <div class="flex items-start justify-between gap-2">
+                  <span class="truncate text-sm font-medium text-gray-900 dark:text-white" :title="group.name">
+                    {{ group.name }}
+                  </span>
+                  <span class="text-sm font-semibold text-gray-900 dark:text-white">
+                    {{ group.count.toLocaleString() }}
+                  </span>
+                </div>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t(`admin.groups.platforms.${group.platform}`) }}
+                </p>
+              </div>
+            </div>
+          </div>
 
-              <!-- Column Settings Dropdown -->
-              <div class="relative" ref="columnDropdownRef">
-                <button
-                  @click="
-                    showColumnDropdown = !showColumnDropdown;
-                    showAutoRefreshDropdown = false
-                  "
-                  class="btn btn-secondary px-2 md:px-3"
-                  :title="t('admin.users.columnSettings')"
-                >
-                  <svg class="h-4 w-4 md:mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 4.5v15m6-15v15m-10.875 0h15.75c.621 0 1.125-.504 1.125-1.125V5.625c0-.621-.504-1.125-1.125-1.125H4.125C3.504 4.5 3 5.004 3 5.625v12.75c0 .621.504 1.125 1.125 1.125z" />
-                  </svg>
-                  <span class="hidden md:inline">{{ t('admin.users.columnSettings') }}</span>
-                </button>
-                <!-- Dropdown menu -->
-                <div
-                  v-if="showColumnDropdown"
-                  class="absolute right-0 z-50 mt-2 w-48 origin-top-right rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800"
-                >
-                  <div class="max-h-80 overflow-y-auto p-2">
-                    <button
-                      v-for="col in toggleableColumns"
-                      :key="col.key"
-                      @click="toggleColumn(col.key)"
-                      class="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
-                    >
-                      <span>{{ col.label }}</span>
-                      <Icon v-if="isColumnVisible(col.key)" name="check" size="sm" class="text-primary-500" />
-                    </button>
+          <div class="card p-4">
+            <div class="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+                  {{ t('admin.accounts.overview.spendTitle') }}
+                </h3>
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.accounts.overview.spendHint') }}
+                </p>
+              </div>
+              <span class="text-xs text-gray-500 dark:text-gray-400">
+                {{ t('admin.accounts.overview.topCount', { count: accountSpendLeaderboard.length }) }}
+              </span>
+            </div>
+
+            <div
+              v-if="todayStatsLoading && accountSpendLeaderboard.length === 0"
+              class="rounded-xl border border-dashed border-gray-200 px-4 py-6 text-sm text-gray-500 dark:border-dark-700 dark:text-gray-400"
+            >
+              {{ t('admin.accounts.overview.loadingSpend') }}
+            </div>
+
+            <div
+              v-else-if="todayStatsError"
+              class="rounded-xl border border-dashed border-rose-200 px-4 py-6 text-sm text-rose-600 dark:border-rose-900/40 dark:text-rose-300"
+            >
+              {{ t('admin.accounts.overview.spendLoadFailed') }}
+            </div>
+
+            <div
+              v-else-if="!hasAccountSpendData"
+              class="rounded-xl border border-dashed border-gray-200 px-4 py-6 text-sm text-gray-500 dark:border-dark-700 dark:text-gray-400"
+            >
+              {{ t('admin.accounts.overview.noSpendData') }}
+            </div>
+
+            <div v-else class="space-y-2">
+              <div
+                v-for="(entry, index) in accountSpendLeaderboard"
+                :key="entry.id"
+                class="flex items-center justify-between gap-4 rounded-xl border border-gray-200 bg-gray-50/70 px-4 py-3 dark:border-dark-700 dark:bg-dark-900/30"
+              >
+                <div class="flex min-w-0 items-center gap-3">
+                  <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xs font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                    #{{ index + 1 }}
+                  </span>
+                  <div class="min-w-0">
+                    <div class="truncate text-sm font-medium text-gray-900 dark:text-white" :title="entry.name">
+                      {{ entry.name }}
+                    </div>
+                    <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {{ t(`admin.accounts.platforms.${entry.platform}`) }} ·
+                      {{ t('admin.accounts.overview.requestsCount', { count: entry.requests }) }}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="text-right">
+                  <div class="text-sm font-semibold text-gray-900 dark:text-white">
+                    {{ formatCurrency(entry.cost) }}
+                  </div>
+                  <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.accounts.overview.todaySpend') }}
                   </div>
                 </div>
               </div>
-            </template>
-            <template #beforeCreate>
-              <button @click="showImportData = true" class="btn btn-secondary">
-                {{ t('admin.accounts.dataImport') }}
-              </button>
-              <button @click="openExportDataDialog" class="btn btn-secondary">
-                {{ selIds.length ? t('admin.accounts.dataExportSelected') : t('admin.accounts.dataExport') }}
-              </button>
-            </template>
-          </AccountTableActions>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap-reverse items-start justify-between gap-3">
+            <AccountTableFilters
+              v-model:searchQuery="params.search"
+              :filters="params"
+              :groups="groups"
+              @update:filters="(newFilters) => Object.assign(params, newFilters)"
+              @change="debouncedReload"
+              @update:searchQuery="debouncedReload"
+            />
+            <AccountTableActions
+              :loading="loading"
+              @refresh="handleManualRefresh"
+              @sync="showSync = true"
+              @create="showCreate = true"
+            >
+              <template #after>
+                <!-- Auto Refresh Dropdown -->
+                <div class="relative" ref="autoRefreshDropdownRef">
+                  <button
+                    @click="
+                      showAutoRefreshDropdown = !showAutoRefreshDropdown;
+                      showColumnDropdown = false
+                    "
+                    class="btn btn-secondary px-2 md:px-3"
+                    :title="t('admin.accounts.autoRefresh')"
+                  >
+                    <Icon name="refresh" size="sm" :class="[autoRefreshEnabled ? 'animate-spin' : '']" />
+                    <span class="hidden md:inline">
+                      {{
+                        autoRefreshEnabled
+                          ? t('admin.accounts.autoRefreshCountdown', { seconds: autoRefreshCountdown })
+                          : t('admin.accounts.autoRefresh')
+                      }}
+                    </span>
+                  </button>
+                  <div
+                    v-if="showAutoRefreshDropdown"
+                    class="absolute right-0 z-50 mt-2 w-56 origin-top-right rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800"
+                  >
+                    <div class="p-2">
+                      <button
+                        @click="setAutoRefreshEnabled(!autoRefreshEnabled)"
+                        class="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+                      >
+                        <span>{{ t('admin.accounts.enableAutoRefresh') }}</span>
+                        <Icon v-if="autoRefreshEnabled" name="check" size="sm" class="text-primary-500" />
+                      </button>
+                      <div class="my-1 border-t border-gray-100 dark:border-gray-700"></div>
+                      <button
+                        v-for="sec in autoRefreshIntervals"
+                        :key="sec"
+                        @click="setAutoRefreshInterval(sec)"
+                        class="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+                      >
+                        <span>{{ autoRefreshIntervalLabel(sec) }}</span>
+                        <Icon v-if="autoRefreshIntervalSeconds === sec" name="check" size="sm" class="text-primary-500" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Error Passthrough Rules -->
+                <button
+                  @click="showErrorPassthrough = true"
+                  class="btn btn-secondary"
+                  :title="t('admin.errorPassthrough.title')"
+                >
+                  <Icon name="shield" size="md" class="mr-1.5" />
+                  <span class="hidden md:inline">{{ t('admin.errorPassthrough.title') }}</span>
+                </button>
+
+                <!-- Column Settings Dropdown -->
+                <div class="relative" ref="columnDropdownRef">
+                  <button
+                    @click="
+                      showColumnDropdown = !showColumnDropdown;
+                      showAutoRefreshDropdown = false
+                    "
+                    class="btn btn-secondary px-2 md:px-3"
+                    :title="t('admin.users.columnSettings')"
+                  >
+                    <svg class="h-4 w-4 md:mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M9 4.5v15m6-15v15m-10.875 0h15.75c.621 0 1.125-.504 1.125-1.125V5.625c0-.621-.504-1.125-1.125-1.125H4.125C3.504 4.5 3 5.004 3 5.625v12.75c0 .621.504 1.125 1.125 1.125z" />
+                    </svg>
+                    <span class="hidden md:inline">{{ t('admin.users.columnSettings') }}</span>
+                  </button>
+                  <!-- Dropdown menu -->
+                  <div
+                    v-if="showColumnDropdown"
+                    class="absolute right-0 z-50 mt-2 w-48 origin-top-right rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800"
+                  >
+                    <div class="max-h-80 overflow-y-auto p-2">
+                      <button
+                        v-for="col in toggleableColumns"
+                        :key="col.key"
+                        @click="toggleColumn(col.key)"
+                        class="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+                      >
+                        <span>{{ col.label }}</span>
+                        <Icon v-if="isColumnVisible(col.key)" name="check" size="sm" class="text-primary-500" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </template>
+              <template #beforeCreate>
+                <button @click="showImportData = true" class="btn btn-secondary">
+                  {{ t('admin.accounts.dataImport') }}
+                </button>
+                <button @click="openExportDataDialog" class="btn btn-secondary">
+                  {{ selIds.length ? t('admin.accounts.dataExportSelected') : t('admin.accounts.dataExport') }}
+                </button>
+              </template>
+            </AccountTableActions>
+          </div>
         </div>
         <div
           v-if="hasPendingListSync"
@@ -327,8 +464,8 @@ import PlatformTypeBadge from '@/components/common/PlatformTypeBadge.vue'
 import Icon from '@/components/icons/Icon.vue'
 import ErrorPassthroughRulesModal from '@/components/admin/ErrorPassthroughRulesModal.vue'
 import { buildOpenAIUsageRefreshKey } from '@/utils/accountUsageRefresh'
-import { formatDateTime, formatRelativeTime } from '@/utils/format'
-import type { Account, AccountPlatform, AccountType, Proxy as AccountProxy, AdminGroup, WindowStats, ClaudeModel } from '@/types'
+import { formatCurrency, formatDateTime, formatRelativeTime } from '@/utils/format'
+import type { Account, AccountPlatform, AccountType, Proxy as AccountProxy, AdminGroup, WindowStats, ClaudeModel, DashboardStats } from '@/types'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -336,6 +473,7 @@ const authStore = useAuthStore()
 
 const proxies = ref<AccountProxy[]>([])
 const groups = ref<AdminGroup[]>([])
+const accountOverview = ref<DashboardStats | null>(null)
 const accountTableRef = ref<HTMLElement | null>(null)
 const selPlatforms = computed<AccountPlatform[]>(() => {
   const platforms = new Set(
@@ -408,6 +546,88 @@ const todayStatsError = ref<string | null>(null)
 const todayStatsReqSeq = ref(0)
 const pendingTodayStatsRefresh = ref(false)
 const usageManualRefreshToken = ref(0)
+
+const accountStatusCards = computed(() => {
+  const stats = accountOverview.value
+  return [
+    {
+      key: 'total',
+      label: t('admin.accounts.overview.total'),
+      count: stats?.total_accounts ?? 0,
+      className: 'border-slate-200 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-900/20',
+      badgeClass: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+    },
+    {
+      key: 'normal',
+      label: t('admin.accounts.overview.normal'),
+      count: stats?.normal_accounts ?? 0,
+      className: 'border-emerald-200 bg-emerald-50/70 dark:border-emerald-900/40 dark:bg-emerald-900/10',
+      badgeClass: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+    },
+    {
+      key: 'error',
+      label: t('admin.accounts.overview.error'),
+      count: stats?.error_accounts ?? 0,
+      className: 'border-rose-200 bg-rose-50/70 dark:border-rose-900/40 dark:bg-rose-900/10',
+      badgeClass: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'
+    },
+    {
+      key: 'rateLimited',
+      label: t('admin.accounts.overview.rateLimited'),
+      count: stats?.ratelimit_accounts ?? 0,
+      className: 'border-amber-200 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-900/10',
+      badgeClass: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+    },
+    {
+      key: 'overloaded',
+      label: t('admin.accounts.overview.overloaded'),
+      count: stats?.overload_accounts ?? 0,
+      className: 'border-purple-200 bg-purple-50/70 dark:border-purple-900/40 dark:bg-purple-900/10',
+      badgeClass: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'
+    }
+  ]
+})
+
+const accountGroupCards = computed(() =>
+  [...groups.value]
+    .sort((a, b) => {
+      const countDiff = (b.account_count ?? 0) - (a.account_count ?? 0)
+      if (countDiff !== 0) return countDiff
+      return a.name.localeCompare(b.name)
+    })
+    .map((group) => ({
+      id: group.id,
+      name: group.name,
+      count: group.account_count ?? 0,
+      platform: group.platform
+    }))
+)
+
+const accountSpendLeaderboard = computed(() =>
+  [...accounts.value]
+    .map((account) => {
+      const stats = todayStatsByAccountId.value[String(account.id)] ?? buildDefaultTodayStats()
+      return {
+        id: account.id,
+        name: account.name,
+        platform: account.platform,
+        cost: stats.cost ?? 0,
+        requests: stats.requests ?? 0
+      }
+    })
+    .sort((a, b) => {
+      const costDiff = b.cost - a.cost
+      if (costDiff !== 0) return costDiff
+      const requestDiff = b.requests - a.requests
+      if (requestDiff !== 0) return requestDiff
+      return a.name.localeCompare(b.name)
+    })
+    .slice(0, 5)
+)
+
+const hasAccountSpendData = computed(() =>
+  accountSpendLeaderboard.value.some((entry) => entry.cost > 0 || entry.requests > 0)
+)
 
 const buildDefaultTodayStats = (): WindowStats => ({
   requests: 0,
@@ -613,6 +833,19 @@ const resetAutoRefreshCache = () => {
 
 const isFirstLoad = ref(true)
 
+const refreshOverviewData = async () => {
+  try {
+    const [stats, nextGroups] = await Promise.all([
+      adminAPI.dashboard.getStats(),
+      adminAPI.groups.getAll()
+    ])
+    accountOverview.value = stats
+    groups.value = nextGroups
+  } catch (error) {
+    console.error('Failed to load account overview:', error)
+  }
+}
+
 const load = async () => {
   const requestParams = params as any
   hasPendingListSync.value = false
@@ -627,6 +860,7 @@ const load = async () => {
     delete requestParams.lite
   }
   await refreshTodayStatsBatch()
+  await refreshOverviewData()
 }
 
 const reload = async () => {
@@ -635,6 +869,7 @@ const reload = async () => {
   pendingTodayStatsRefresh.value = false
   await baseReload()
   await refreshTodayStatsBatch()
+  await refreshOverviewData()
 }
 
 const debouncedReload = () => {
@@ -1302,11 +1537,10 @@ const handleClickOutside = (event: MouseEvent) => {
 onMounted(async () => {
   load()
   try {
-    const [p, g] = await Promise.all([adminAPI.proxies.getAll(), adminAPI.groups.getAll()])
+    const [p] = await Promise.all([adminAPI.proxies.getAll()])
     proxies.value = p
-    groups.value = g
   } catch (error) {
-    console.error('Failed to load proxies/groups:', error)
+    console.error('Failed to load proxies:', error)
   }
   window.addEventListener('scroll', handleScroll, true)
   document.addEventListener('click', handleClickOutside)

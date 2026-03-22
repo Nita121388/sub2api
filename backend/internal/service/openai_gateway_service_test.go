@@ -1760,6 +1760,21 @@ func TestExtractOpenAISSEDataLine(t *testing.T) {
 	}
 }
 
+func TestExtractOpenAITerminalResponseBodyFromSSEData(t *testing.T) {
+	t.Run("extracts response from terminal events", func(t *testing.T) {
+		payload := []byte(`{"type":"response.incomplete","response":{"id":"resp_1","output":[{"type":"message"}]}}`)
+		body := extractOpenAITerminalResponseBodyFromSSEData(payload)
+		require.NotNil(t, body)
+		require.Contains(t, string(body), `"id":"resp_1"`)
+	})
+
+	t.Run("ignores non terminal events", func(t *testing.T) {
+		payload := []byte(`{"type":"response.output_text.delta","delta":"x"}`)
+		body := extractOpenAITerminalResponseBodyFromSSEData(payload)
+		require.Nil(t, body)
+	})
+}
+
 func TestParseSSEUsage_SelectiveParsing(t *testing.T) {
 	svc := &OpenAIGatewayService{}
 	usage := &OpenAIUsage{InputTokens: 9, OutputTokens: 8, CacheReadInputTokens: 7}

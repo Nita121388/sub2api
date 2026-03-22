@@ -178,6 +178,17 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/chat-test',
+    name: 'ChatTest',
+    component: () => import('@/views/user/ChatTestView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: '对话',
+      titleKey: 'chatTest.title'
+    }
+  },
+  {
     path: '/redeem',
     name: 'Redeem',
     component: () => import('@/views/user/RedeemView.vue'),

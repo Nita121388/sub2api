@@ -255,7 +255,7 @@ func (s *OpenAIGatewayService) handleChatBufferedStreamingResponse(
 			continue
 		}
 
-		if (event.Type == "response.completed" || event.Type == "response.incomplete" || event.Type == "response.failed") &&
+		if (event.Type == "response.completed" || event.Type == "response.incomplete" || event.Type == "response.failed" || event.Type == "response.done") &&
 			event.Response != nil {
 			finalResponse = event.Response
 			if event.Response.Usage != nil {
@@ -285,6 +285,7 @@ func (s *OpenAIGatewayService) handleChatBufferedStreamingResponse(
 	}
 
 	chatResp := apicompat.ResponsesToChatCompletions(finalResponse, originalModel)
+	responseBody, _ := json.Marshal(chatResp)
 
 	if s.responseHeaderFilter != nil {
 		responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
@@ -297,6 +298,7 @@ func (s *OpenAIGatewayService) handleChatBufferedStreamingResponse(
 		Model:         originalModel,
 		BillingModel:  mappedModel,
 		UpstreamModel: mappedModel,
+		ResponseBody:  responseBody,
 		Stream:        false,
 		Duration:      time.Since(startTime),
 	}, nil
@@ -329,6 +331,7 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 
 	var usage OpenAIUsage
 	var firstTokenMs *int
+	var finalResponse *apicompat.ResponsesResponse
 	firstChunk := true
 
 	scanner := bufio.NewScanner(resp.Body)
@@ -339,17 +342,23 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 	scanner.Buffer(make([]byte, 0, 64*1024), maxLineSize)
 
 	resultWithUsage := func() *OpenAIForwardResult {
-		return &OpenAIForwardResult{
-			RequestID:     requestID,
-			Usage:         usage,
-			Model:         originalModel,
-			BillingModel:  mappedModel,
-			UpstreamModel: mappedModel,
-			Stream:        true,
-			Duration:      time.Since(startTime),
-			FirstTokenMs:  firstTokenMs,
+		var responseBody []byte
+			if finalResponse != nil {
+				chatResp := apicompat.ResponsesToChatCompletions(finalResponse, originalModel)
+				responseBody, _ = json.Marshal(chatResp)
+			}
+			return &OpenAIForwardResult{
+				RequestID:     requestID,
+				Usage:         usage,
+				Model:         originalModel,
+				BillingModel:  mappedModel,
+				UpstreamModel: mappedModel,
+				ResponseBody:  responseBody,
+				Stream:        true,
+				Duration:      time.Since(startTime),
+				FirstTokenMs:  firstTokenMs,
+			}
 		}
-	}
 
 	processDataLine := func(payload string) bool {
 		if firstChunk {
@@ -368,14 +377,17 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 		}
 
 		// Extract usage from completion events
-		if (event.Type == "response.completed" || event.Type == "response.incomplete" || event.Type == "response.failed") &&
-			event.Response != nil && event.Response.Usage != nil {
-			usage = OpenAIUsage{
-				InputTokens:  event.Response.Usage.InputTokens,
-				OutputTokens: event.Response.Usage.OutputTokens,
-			}
-			if event.Response.Usage.InputTokensDetails != nil {
-				usage.CacheReadInputTokens = event.Response.Usage.InputTokensDetails.CachedTokens
+		if (event.Type == "response.completed" || event.Type == "response.incomplete" || event.Type == "response.failed" || event.Type == "response.done") &&
+			event.Response != nil {
+			finalResponse = event.Response
+			if event.Response.Usage != nil {
+				usage = OpenAIUsage{
+					InputTokens:  event.Response.Usage.InputTokens,
+					OutputTokens: event.Response.Usage.OutputTokens,
+				}
+				if event.Response.Usage.InputTokensDetails != nil {
+					usage.CacheReadInputTokens = event.Response.Usage.InputTokensDetails.CachedTokens
+				}
 			}
 		}
 
