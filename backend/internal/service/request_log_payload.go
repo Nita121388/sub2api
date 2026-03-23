@@ -92,7 +92,9 @@ func DecodeRequestLogPayload(data []byte, encoding *string) (*string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("open gzip request log payload: %w", err)
 		}
-		defer reader.Close()
+		defer func() {
+			_ = reader.Close()
+		}()
 
 		raw, err := io.ReadAll(reader)
 		if err != nil {
@@ -121,4 +123,3 @@ func sanitizeResponseBodyForRequestLog(raw []byte, maxBytes int) (string, bool) 
 
 	return sanitizeErrorBodyForStorage(string(raw), maxBytes)
 }
-

@@ -34,11 +34,11 @@ type RequestLog struct {
 	OutputTokens int     `json:"output_tokens"`
 	TotalCost    float64 `json:"total_cost"`
 
-	Stream       bool    `json:"stream"`
-	DurationMs   *int    `json:"duration_ms,omitempty"`
-	FirstTokenMs *int    `json:"first_token_ms,omitempty"`
-	UserAgent    *string `json:"user_agent,omitempty"`
-	IPAddress    *string `json:"ip_address,omitempty"`
+	Stream       bool               `json:"stream"`
+	DurationMs   *int               `json:"duration_ms,omitempty"`
+	FirstTokenMs *int               `json:"first_token_ms,omitempty"`
+	UserAgent    *string            `json:"user_agent,omitempty"`
+	IPAddress    *string            `json:"ip_address,omitempty"`
 	Payload      *RequestLogPayload `json:"payload,omitempty"`
 
 	CreatedAt time.Time `json:"created_at"`

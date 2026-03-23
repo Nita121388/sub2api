@@ -343,22 +343,22 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 
 	resultWithUsage := func() *OpenAIForwardResult {
 		var responseBody []byte
-			if finalResponse != nil {
-				chatResp := apicompat.ResponsesToChatCompletions(finalResponse, originalModel)
-				responseBody, _ = json.Marshal(chatResp)
-			}
-			return &OpenAIForwardResult{
-				RequestID:     requestID,
-				Usage:         usage,
-				Model:         originalModel,
-				BillingModel:  mappedModel,
-				UpstreamModel: mappedModel,
-				ResponseBody:  responseBody,
-				Stream:        true,
-				Duration:      time.Since(startTime),
-				FirstTokenMs:  firstTokenMs,
-			}
+		if finalResponse != nil {
+			chatResp := apicompat.ResponsesToChatCompletions(finalResponse, originalModel)
+			responseBody, _ = json.Marshal(chatResp)
 		}
+		return &OpenAIForwardResult{
+			RequestID:     requestID,
+			Usage:         usage,
+			Model:         originalModel,
+			BillingModel:  mappedModel,
+			UpstreamModel: mappedModel,
+			ResponseBody:  responseBody,
+			Stream:        true,
+			Duration:      time.Since(startTime),
+			FirstTokenMs:  firstTokenMs,
+		}
+	}
 
 	processDataLine := func(payload string) bool {
 		if firstChunk {

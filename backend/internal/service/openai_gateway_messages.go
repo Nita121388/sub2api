@@ -351,22 +351,22 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 	// resultWithUsage builds the final result snapshot.
 	resultWithUsage := func() *OpenAIForwardResult {
 		var responseBody []byte
-			if finalResponse != nil {
-				anthropicResp := apicompat.ResponsesToAnthropic(finalResponse, originalModel)
-				responseBody, _ = json.Marshal(anthropicResp)
-			}
-			return &OpenAIForwardResult{
-				RequestID:     requestID,
-				Usage:         usage,
-				Model:         originalModel,
-				BillingModel:  mappedModel,
-				UpstreamModel: mappedModel,
-				ResponseBody:  responseBody,
-				Stream:        true,
-				Duration:      time.Since(startTime),
-				FirstTokenMs:  firstTokenMs,
-			}
+		if finalResponse != nil {
+			anthropicResp := apicompat.ResponsesToAnthropic(finalResponse, originalModel)
+			responseBody, _ = json.Marshal(anthropicResp)
 		}
+		return &OpenAIForwardResult{
+			RequestID:     requestID,
+			Usage:         usage,
+			Model:         originalModel,
+			BillingModel:  mappedModel,
+			UpstreamModel: mappedModel,
+			ResponseBody:  responseBody,
+			Stream:        true,
+			Duration:      time.Since(startTime),
+			FirstTokenMs:  firstTokenMs,
+		}
+	}
 
 	// processDataLine handles a single "data: ..." SSE line from upstream.
 	// Returns (clientDisconnected bool).
