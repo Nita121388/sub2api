@@ -503,7 +503,7 @@ function detectProtocol(payload: Record<string, unknown> | null): string {
   if (!payload) {
     return 'unknown'
   }
-  if (Array.isArray(payload.input) || typeof payload.output_text === 'string' || Array.isArray(payload.output)) {
+  if (payload.input !== undefined || typeof payload.output_text === 'string' || Array.isArray(payload.output)) {
     return 'responses'
   }
   if (Array.isArray(payload.choices)) {
@@ -525,15 +525,9 @@ function normalizeRequestConversation(payload: Record<string, unknown> | null): 
 
   pushSystemEntries(entries, payload.system, protocol)
 
-  const input = payload.input
-  if (Array.isArray(input)) {
-    input.forEach((item, index) => {
-      const entry = normalizeInputItem(item, protocol, 'request', index)
-      if (entry) {
-        entries.push(entry)
-      }
-    })
-  }
+  normalizeRequestInput(payload.input, protocol).forEach((entry) => {
+    entries.push(entry)
+  })
 
   const messages = payload.messages
   if (Array.isArray(messages)) {
@@ -546,6 +540,26 @@ function normalizeRequestConversation(payload: Record<string, unknown> | null): 
   }
 
   return entries
+}
+
+function normalizeRequestInput(value: unknown, protocol: string): ConversationEntry[] {
+  if (typeof value === 'string') {
+    const entry = normalizeInputItem(value, protocol, 'request', 0)
+    return entry ? [entry] : []
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item, index) => normalizeInputItem(item, protocol, 'request', index))
+      .filter((entry): entry is ConversationEntry => entry !== null)
+  }
+
+  if (value && typeof value === 'object') {
+    const entry = normalizeInputItem(value, protocol, 'request', 0)
+    return entry ? [entry] : []
+  }
+
+  return []
 }
 
 function normalizeResponseConversation(payload: Record<string, unknown> | null): ConversationEntry[] {
