@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: build-binaries-${{ github.ref }}
@@ -109,3 +109,52 @@ jobs:
             backend/dist/config.example.yaml
             backend/dist/sub2api.service
           retention-days: 14
+
+  publish-release:
+    needs: build-embedded-binary
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download amd64 artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: sub2api-linux-amd64
+          path: release-assets/amd64
+
+      - name: Download arm64 artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: sub2api-linux-arm64
+          path: release-assets/arm64
+
+      - name: Prepare release metadata
+        id: meta
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          echo "short_sha=${SHORT_SHA}" >> "${GITHUB_OUTPUT}"
+          cat > release-notes.md <<EOF
+          Automated build for \`custom/main\`.
+
+          - Commit: \`${GITHUB_SHA}\`
+          - Short SHA: \`${SHORT_SHA}\`
+          - Workflow run: [#${GITHUB_RUN_NUMBER}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})
+
+          Assets:
+          - \`sub2api-linux-amd64.tar.gz\`
+          - \`sub2api-linux-arm64.tar.gz\`
+          - Raw embedded binaries for Linux amd64 / arm64
+
+          These binaries are built with frontend assets embedded via \`-tags embed\`.
+          EOF
+
+      - name: Publish prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: custom-main-${{ steps.meta.outputs.short_sha }}
+          name: custom/main build ${{ steps.meta.outputs.short_sha }}
+          body_path: release-notes.md
+          prerelease: true
+          files: |
+            release-assets/amd64/sub2api-linux-amd64
+            release-assets/amd64/sub2api-linux-amd64.tar.gz
+            release-assets/arm64/sub2api-linux-arm64
+            release-assets/arm64/sub2api-linux-arm64.tar.gz
