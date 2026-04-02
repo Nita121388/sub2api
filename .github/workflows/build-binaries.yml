@@ -1,0 +1,111 @@
+name: Build Binaries
+
+on:
+  push:
+    branches:
+      - custom/main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-binaries-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify frontend types
+        working-directory: frontend
+        run: pnpm exec vue-tsc --noEmit
+
+      - name: Build frontend
+        working-directory: frontend
+        run: pnpm run build
+
+      - name: Upload embedded frontend assets
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend-dist
+          path: backend/internal/web/dist/
+          retention-days: 14
+
+  build-embedded-binary:
+    needs: build-frontend
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download embedded frontend assets
+        uses: actions/download-artifact@v8
+        with:
+          name: frontend-dist
+          path: backend/internal/web/dist/
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          check-latest: false
+          cache-dependency-path: backend/go.sum
+
+      - name: Verify Go version
+        run: go version | grep -q 'go1.26.1'
+
+      - name: Build embedded binary
+        working-directory: backend
+        env:
+          CGO_ENABLED: 0
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          mkdir -p dist
+          go build -trimpath -tags embed -o "dist/sub2api-${GOOS}-${GOARCH}" ./cmd/server
+          cp ../deploy/config.example.yaml "dist/config.example.yaml"
+          cp ../deploy/sub2api.service "dist/sub2api.service"
+          tar -C dist -czf "dist/sub2api-${GOOS}-${GOARCH}.tar.gz" \
+            "sub2api-${GOOS}-${GOARCH}" \
+            config.example.yaml \
+            sub2api.service
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: sub2api-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: |
+            backend/dist/sub2api-${{ matrix.goos }}-${{ matrix.goarch }}
+            backend/dist/sub2api-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
+            backend/dist/config.example.yaml
+            backend/dist/sub2api.service
+          retention-days: 14
