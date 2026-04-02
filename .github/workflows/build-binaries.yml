@@ -146,13 +146,14 @@ jobs:
           These binaries are built with frontend assets embedded via \`-tags embed\`.
           EOF
 
-      - name: Publish prerelease
+      - name: Publish latest release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: custom-main-${{ steps.meta.outputs.short_sha }}
           name: custom/main build ${{ steps.meta.outputs.short_sha }}
           body_path: release-notes.md
-          prerelease: true
+          prerelease: false
+          make_latest: true
           files: |
             release-assets/amd64/sub2api-linux-amd64
             release-assets/amd64/sub2api-linux-amd64.tar.gz
