@@ -14,3 +14,17 @@ exceptions:
     mitigation: "Load only on export; restrict export permissions and data scope"
     expires_on: "2026-04-05"
     owner: "security@your-domain"
+  - package: lodash
+    advisory: "GHSA-r5fr-rjxr-66jc"
+    severity: high
+    reason: "Indirect dependency via ahooks/chevrotain; lodash templates not used in our code while upstream prepares patched release."
+    mitigation: "No _.template usage in app; monitor upstream and upgrade when fixed."
+    expires_on: "2026-05-05"
+    owner: "security@your-domain"
+  - package: lodash-es
+    advisory: "GHSA-r5fr-rjxr-66jc"
+    severity: high
+    reason: "Pulled in by mermaid/chevrotain toolchain; awaiting upstream mitigation while verifying no template usage in our bundle."
+    mitigation: "Mermaid only used in admin-only views; restrict access and update once dependency ships fix."
+    expires_on: "2026-05-05"
+    owner: "security@your-domain"
