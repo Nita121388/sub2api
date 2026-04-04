@@ -387,7 +387,19 @@
             </div>
           </template>
           <template #cell-actions="{ row }">
-            <div class="flex items-center gap-1">
+            <div class="flex flex-wrap items-center gap-1">
+              <button
+                @click="handleQuickTestClick(row)"
+                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-emerald-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700 dark:text-emerald-300 dark:hover:bg-emerald-900/30"
+                :title="quickTestPreference
+                  ? t('admin.accounts.quickTestTooltip', { model: quickTestPreference.label })
+                  : t('admin.accounts.quickTestTooltipUnset')"
+              >
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.972l11.54 6.347a1.125 1.125 0 010 1.944l-11.54 6.347a1.125 1.125 0 01-1.667-.972z" />
+                </svg>
+                <span class="text-xs">{{ t('admin.accounts.quickTest') }}</span>
+              </button>
               <button @click="handleEdit(row)" class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400">
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg>
                 <span class="text-xs">{{ t('common.edit') }}</span>
@@ -410,10 +422,17 @@
     <CreateAccountModal :show="showCreate" :proxies="proxies" :groups="groups" @close="showCreate = false" @created="reload" />
     <EditAccountModal :show="showEdit" :account="edAcc" :proxies="proxies" :groups="groups" @close="showEdit = false" @updated="handleAccountUpdated" />
     <ReAuthAccountModal :show="showReAuth" :account="reAuthAcc" @close="closeReAuthModal" @reauthorized="handleAccountUpdated" />
-    <AccountTestModal :show="showTest" :account="testingAcc" @close="closeTestModal" />
+    <AccountTestModal
+      :show="showTest"
+      :account="testingAcc"
+      :preset-model-id="quickTestAutoStart ? quickTestPresetModelId : null"
+      :auto-start="quickTestAutoStart"
+      @close="closeTestModal"
+      @preset-missing="handleQuickPresetMissing"
+    />
     <AccountStatsModal :show="showStats" :account="statsAcc" @close="closeStatsModal" />
     <ScheduledTestsPanel :show="showSchedulePanel" :account-id="scheduleAcc?.id ?? null" :model-options="scheduleModelOptions" @close="closeSchedulePanel" />
-    <AccountActionMenu :show="menu.show" :account="menu.acc" :position="menu.pos" @close="menu.show = false" @test="handleTest" @stats="handleViewStats" @schedule="handleSchedule" @reauth="handleReAuth" @refresh-token="handleRefresh" @recover-state="handleRecoverState" @reset-quota="handleResetQuota" />
+    <AccountActionMenu :show="menu.show" :account="menu.acc" :position="menu.pos" @close="menu.show = false" @test="handleTest" @quick-test-settings="handleQuickTestSettings" @stats="handleViewStats" @schedule="handleSchedule" @reauth="handleReAuth" @refresh-token="handleRefresh" @recover-state="handleRecoverState" @reset-quota="handleResetQuota" />
     <SyncFromCrsModal :show="showSync" @close="showSync = false" @synced="reload" />
     <ImportDataModal :show="showImportData" @close="showImportData = false" @imported="handleDataImported" />
     <BulkEditAccountModal :show="showBulkEdit" :account-ids="selIds" :selected-platforms="selPlatforms" :selected-types="selTypes" :proxies="proxies" :groups="groups" @close="showBulkEdit = false" @updated="handleBulkUpdated" />
@@ -426,6 +445,60 @@
       </label>
     </ConfirmDialog>
     <ErrorPassthroughRulesModal :show="showErrorPassthrough" @close="showErrorPassthrough = false" />
+    <BaseDialog
+      :show="quickTestSetup.show"
+      :title="t('admin.accounts.quickTestSetupTitle')"
+      width="narrow"
+      @close="closeQuickTestSetup"
+    >
+      <div class="space-y-4">
+        <p class="text-sm text-gray-600 dark:text-gray-300">
+          {{
+            quickTestPreference
+              ? t('admin.accounts.quickTestSetupDescriptionSet', { model: quickTestPreference.label })
+              : t('admin.accounts.quickTestSetupDescription')
+          }}
+        </p>
+        <div
+          v-if="quickTestSetup.loading"
+          class="rounded-lg border border-dashed border-gray-200 px-3 py-6 text-sm text-gray-500 dark:border-dark-600 dark:text-gray-300"
+        >
+          {{ t('admin.accounts.quickTestSetupLoading') }}
+        </div>
+        <div
+          v-else-if="quickTestSetup.options.length === 0"
+          class="rounded-lg border border-dashed border-gray-200 px-3 py-6 text-sm text-gray-500 dark:border-dark-600 dark:text-gray-300"
+        >
+          {{ t('admin.accounts.quickTestSetupEmpty') }}
+        </div>
+        <div v-else class="space-y-2">
+          <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+            {{ t('admin.accounts.quickTestSetupLabel') }}
+          </label>
+          <Select
+            v-model="quickTestSetup.selected"
+            :options="quickTestSetup.options"
+            :disabled="quickTestSetup.loading"
+            :placeholder="t('admin.accounts.quickTestSetupPlaceholder')"
+          />
+        </div>
+      </div>
+      <template #footer>
+        <button
+          class="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 dark:bg-dark-600 dark:text-gray-300 dark:hover:bg-dark-500"
+          @click="closeQuickTestSetup"
+        >
+          {{ t('common.cancel') }}
+        </button>
+        <button
+          class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+          :disabled="quickTestSetup.loading || !quickTestSetup.selected"
+          @click="confirmQuickTestSetup"
+        >
+          {{ t('admin.accounts.quickTestSetupSave') }}
+        </button>
+      </template>
+    </BaseDialog>
   </AppLayout>
 </template>
 
@@ -444,6 +517,7 @@ import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 import DataTable from '@/components/common/DataTable.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import BaseDialog from '@/components/common/BaseDialog.vue'
 import { CreateAccountModal, EditAccountModal, BulkEditAccountModal, SyncFromCrsModal, TempUnschedStatusModal } from '@/components/account'
 import AccountTableActions from '@/components/admin/account/AccountTableActions.vue'
 import AccountTableFilters from '@/components/admin/account/AccountTableFilters.vue'
@@ -516,6 +590,65 @@ const scheduleModelOptions = ref<SelectOption[]>([])
 const togglingSchedulable = ref<number | null>(null)
 const menu = reactive<{show:boolean, acc:Account|null, pos:{top:number, left:number}|null}>({ show: false, acc: null, pos: null })
 const exportingData = ref(false)
+
+const loadQuickTestPreference = () => {
+  if (typeof window === 'undefined') return
+  try {
+    const raw = localStorage.getItem(QUICK_TEST_MODEL_KEY)
+    if (!raw) return
+    const parsed = JSON.parse(raw) as QuickTestPreference
+    if (parsed?.id) {
+      quickTestPreference.value = parsed
+    }
+  } catch (error) {
+    console.error('Failed to load quick test preference:', error)
+  }
+}
+
+const persistQuickTestPreference = (pref: QuickTestPreference | null) => {
+  if (typeof window === 'undefined') return
+  try {
+    if (pref) {
+      localStorage.setItem(QUICK_TEST_MODEL_KEY, JSON.stringify(pref))
+    } else {
+      localStorage.removeItem(QUICK_TEST_MODEL_KEY)
+    }
+  } catch (error) {
+    console.error('Failed to persist quick test preference:', error)
+  }
+}
+
+const clearQuickTestPreference = () => {
+  quickTestPreference.value = null
+  persistQuickTestPreference(null)
+}
+
+interface QuickTestPreference {
+  id: string
+  label: string
+}
+
+type QuickTestIntent = 'run' | 'config'
+
+const QUICK_TEST_MODEL_KEY = 'accounts-quick-test-model'
+const quickTestPreference = ref<QuickTestPreference | null>(null)
+const quickTestPresetModelId = ref<string | null>(null)
+const quickTestAutoStart = ref(false)
+const quickTestSetup = reactive<{
+  show: boolean
+  account: Account | null
+  options: SelectOption[]
+  selected: string | number | boolean | null
+  loading: boolean
+  intent: QuickTestIntent
+}>({
+  show: false,
+  account: null,
+  options: [],
+  selected: '',
+  loading: false,
+  intent: 'run'
+})
 
 // Column settings
 const showColumnDropdown = ref(false)
@@ -750,6 +883,7 @@ const saveAutoRefreshToStorage = () => {
 if (typeof window !== 'undefined') {
   loadSavedColumns()
   loadSavedAutoRefresh()
+  loadQuickTestPreference()
 }
 
 const setAutoRefreshEnabled = (enabled: boolean) => {
@@ -1427,10 +1561,103 @@ const handleExportData = async () => {
     showExportDataDialog.value = false
   }
 }
-const closeTestModal = () => { showTest.value = false; testingAcc.value = null }
+
+const openQuickTestSetup = async (account: Account, intent: QuickTestIntent = 'run') => {
+  quickTestSetup.account = account
+  quickTestSetup.intent = intent
+  quickTestSetup.show = true
+  quickTestSetup.loading = true
+  quickTestSetup.options = []
+  quickTestSetup.selected = quickTestPreference.value?.id ?? ''
+  try {
+    const models = await adminAPI.accounts.getAvailableModels(account.id)
+    quickTestSetup.options = models.map((m: ClaudeModel) => ({
+      value: m.id,
+      label: m.display_name || m.id
+    }))
+    const hasSelection =
+      quickTestSetup.selected !== null &&
+      quickTestSetup.selected !== undefined &&
+      quickTestSetup.selected !== ''
+    if (
+      !hasSelection ||
+      !quickTestSetup.options.some((opt) => String(opt.value) === String(quickTestSetup.selected))
+    ) {
+      const fallback = quickTestSetup.options[0]?.value ?? ''
+      quickTestSetup.selected = fallback === null ? '' : fallback
+    }
+  } catch (error) {
+    console.error('Failed to load quick test models:', error)
+    quickTestSetup.options = []
+    appStore.showError(t('admin.accounts.quickTestLoadModelsFailed'))
+  } finally {
+    quickTestSetup.loading = false
+  }
+}
+
+const closeQuickTestSetup = () => {
+  quickTestSetup.show = false
+  quickTestSetup.account = null
+  quickTestSetup.options = []
+  quickTestSetup.selected = ''
+  quickTestSetup.loading = false
+  quickTestSetup.intent = 'run'
+}
+
+const launchQuickTest = (account: Account, modelId: string) => {
+  testingAcc.value = account
+  quickTestPresetModelId.value = modelId
+  quickTestAutoStart.value = true
+  showTest.value = true
+}
+
+const confirmQuickTestSetup = () => {
+  if (
+    quickTestSetup.selected === null ||
+    quickTestSetup.selected === undefined ||
+    quickTestSetup.selected === ''
+  ) {
+    appStore.showError(t('admin.accounts.quickTestSelectModelHint'))
+    return
+  }
+  const modelId = String(quickTestSetup.selected)
+  const selectedOption = quickTestSetup.options.find((opt) => String(opt.value) === modelId)
+  const pref: QuickTestPreference = {
+    id: modelId,
+    label: selectedOption?.label || modelId
+  }
+  quickTestPreference.value = pref
+  persistQuickTestPreference(pref)
+  appStore.showSuccess(t('admin.accounts.quickTestSaved', { model: pref.label }))
+  const shouldRun = quickTestSetup.intent === 'run' && quickTestSetup.account
+  const accountToTest = quickTestSetup.account
+  closeQuickTestSetup()
+  if (shouldRun && accountToTest) {
+    launchQuickTest(accountToTest, pref.id)
+  }
+}
+
+const resetQuickTestFlags = () => {
+  quickTestAutoStart.value = false
+  quickTestPresetModelId.value = null
+}
+
+const closeTestModal = () => {
+  showTest.value = false
+  testingAcc.value = null
+  resetQuickTestFlags()
+}
 const closeStatsModal = () => { showStats.value = false; statsAcc.value = null }
 const closeReAuthModal = () => { showReAuth.value = false; reAuthAcc.value = null }
+const handleQuickTestClick = (account: Account) => {
+  if (!quickTestPreference.value) {
+    openQuickTestSetup(account, 'run')
+    return
+  }
+  launchQuickTest(account, quickTestPreference.value.id)
+}
 const handleTest = (a: Account) => { testingAcc.value = a; showTest.value = true }
+const handleQuickTestSettings = (a: Account) => { openQuickTestSetup(a, 'config') }
 const handleViewStats = (a: Account) => { statsAcc.value = a; showStats.value = true }
 const handleSchedule = async (a: Account) => {
   scheduleAcc.value = a
@@ -1473,6 +1700,16 @@ const handleResetQuota = async (a: Account) => {
     appStore.showSuccess(t('common.success'))
   } catch (error) {
     console.error('Failed to reset quota:', error)
+  }
+}
+
+const handleQuickPresetMissing = () => {
+  const account = testingAcc.value
+  closeTestModal()
+  clearQuickTestPreference()
+  appStore.showError(t('admin.accounts.quickTestPresetMissing'))
+  if (account) {
+    openQuickTestSetup(account, 'run')
   }
 }
 const handleDelete = (a: Account) => { deletingAcc.value = a; showDeleteDialog.value = true }

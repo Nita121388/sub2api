@@ -239,13 +239,19 @@ interface PreviewImage {
   mimeType?: string
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   show: boolean
   account: Account | null
-}>()
+  presetModelId?: string | null
+  autoStart?: boolean
+}>(), {
+  presetModelId: null,
+  autoStart: false
+})
 
 const emit = defineEmits<{
   (e: 'close'): void
+  (e: 'preset-missing'): void
 }>()
 
 const terminalRef = ref<HTMLElement | null>(null)
@@ -268,6 +274,7 @@ const supportsGeminiImageTest = computed(() => {
 
   return props.account?.platform === 'gemini' || (props.account?.platform === 'antigravity' && props.account?.type === 'apikey')
 })
+let autoStartArmed = false
 
 const sortTestModels = (models: ClaudeModel[]) => {
   const priorityMap = new Map(prioritizedGeminiModels.map((id, index) => [id, index]))
@@ -287,8 +294,27 @@ watch(
     if (newVal && props.account) {
       testPrompt.value = ''
       resetState()
-      await loadAvailableModels()
+      autoStartArmed = Boolean(props.autoStart)
+      const presetMatched = await loadAvailableModels()
+      if (!autoStartArmed) return
+      if (isSoraAccount.value) {
+        autoStartArmed = false
+        startTest()
+        return
+      }
+      if (props.presetModelId && !presetMatched) {
+        autoStartArmed = false
+        emit('preset-missing')
+        return
+      }
+      if (selectedModelId.value) {
+        autoStartArmed = false
+        startTest()
+      } else {
+        autoStartArmed = false
+      }
     } else {
+      autoStartArmed = false
       closeEventSource()
     }
   }
@@ -300,24 +326,35 @@ watch(selectedModelId, () => {
   }
 })
 
-const loadAvailableModels = async () => {
-  if (!props.account) return
+const loadAvailableModels = async (): Promise<boolean> => {
+  if (!props.account) return false
   if (props.account.platform === 'sora') {
     availableModels.value = []
     selectedModelId.value = ''
     loadingModels.value = false
-    return
+    return true
   }
 
   loadingModels.value = true
   selectedModelId.value = '' // Reset selection before loading
+  let presetMatched = false
   try {
     const models = await adminAPI.accounts.getAvailableModels(props.account.id)
-    availableModels.value = props.account.platform === 'gemini' || props.account.platform === 'antigravity'
-      ? sortTestModels(models)
-      : models
+    availableModels.value =
+      props.account.platform === 'gemini' || props.account.platform === 'antigravity'
+        ? sortTestModels(models)
+        : models
+
+    if (props.presetModelId) {
+      const preset = availableModels.value.find((m) => m.id === props.presetModelId)
+      if (preset) {
+        selectedModelId.value = preset.id
+        presetMatched = true
+      }
+    }
+
     // Default selection by platform
-    if (availableModels.value.length > 0) {
+    if (!presetMatched && availableModels.value.length > 0) {
       if (props.account.platform === 'gemini') {
         selectedModelId.value = availableModels.value[0].id
       } else {
@@ -334,6 +371,8 @@ const loadAvailableModels = async () => {
   } finally {
     loadingModels.value = false
   }
+
+  return presetMatched
 }
 
 const resetState = () => {
