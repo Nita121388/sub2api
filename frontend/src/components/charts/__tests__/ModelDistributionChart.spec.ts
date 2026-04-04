@@ -13,6 +13,12 @@ const messages: Record<string, string> = {
   'admin.dashboard.spendingRankingTokens': 'Tokens',
   'admin.dashboard.spendingRankingSpend': 'Spend',
   'admin.dashboard.spendingRankingOther': 'Others',
+  'admin.dashboard.spendingRankingCollapse': 'Collapse Ranking',
+  'admin.dashboard.spendingRankingExpand': 'Expand Ranking',
+  'admin.dashboard.spendingRankingCollapsed': 'The ranking is hidden.',
+  'admin.dashboard.spendingRankingPrevious': 'Previous',
+  'admin.dashboard.spendingRankingNext': 'Next',
+  'admin.dashboard.spendingRankingPageInfo': 'Page {page} / {total}',
   'admin.dashboard.model': 'Model',
   'admin.dashboard.requests': 'Requests',
   'admin.dashboard.tokens': 'Tokens',
@@ -29,7 +35,15 @@ vi.mock('vue-i18n', async () => {
   return {
     ...actual,
     useI18n: () => ({
-      t: (key: string) => messages[key] ?? key,
+      t: (key: string, params?: Record<string, string | number>) => {
+        let text = messages[key] ?? key
+        if (params) {
+          Object.entries(params).forEach(([paramKey, value]) => {
+            text = text.replace(new RegExp(`{${paramKey}}`, 'g'), String(value))
+          })
+        }
+        return text
+      },
     }),
   }
 })
@@ -39,6 +53,10 @@ vi.mock('vue-chartjs', () => ({
     props: ['data'],
     template: '<div class="chart-data">{{ JSON.stringify(data) }}</div>',
   },
+}))
+
+vi.mock('@/api/admin/dashboard', () => ({
+  getUserBreakdown: vi.fn(() => Promise.resolve({ users: [] })),
 }))
 
 describe('ModelDistributionChart', () => {
@@ -167,5 +185,70 @@ describe('ModelDistributionChart', () => {
     expect(rows[2].text()).toContain('4')
     expect(rows[2].text()).toContain('400')
     expect(rows[2].text()).toContain('$10.00')
+  })
+
+  it('filters zero-spend ranking entries, paginates more than five rows, and toggles collapse state', async () => {
+    const rankingItems = [
+      { user_id: 1, email: 'alpha@example.com', actual_cost: 12, requests: 20, tokens: 2000 },
+      { user_id: 2, email: 'beta@example.com', actual_cost: 10, requests: 18, tokens: 1800 },
+      { user_id: 3, email: 'gamma@example.com', actual_cost: 8, requests: 16, tokens: 1600 },
+      { user_id: 4, email: 'delta@example.com', actual_cost: 6, requests: 14, tokens: 1400 },
+      { user_id: 5, email: 'epsilon@example.com', actual_cost: 4, requests: 12, tokens: 1200 },
+      { user_id: 6, email: 'zeta@example.com', actual_cost: 2, requests: 10, tokens: 1000 },
+      { user_id: 7, email: 'zero@example.com', actual_cost: 0, requests: 8, tokens: 800 },
+    ]
+    const totalActualCost = rankingItems.reduce((sum, item) => sum + item.actual_cost, 0) + 5
+    const totalRequests = rankingItems.reduce((sum, item) => sum + item.requests, 0) + 30
+    const totalTokens = rankingItems.reduce((sum, item) => sum + item.tokens, 0) + 300
+
+    const wrapper = mount(ModelDistributionChart, {
+      props: {
+        modelStats: [],
+        enableRankingView: true,
+        rankingItems,
+        rankingTotalActualCost: totalActualCost,
+        rankingTotalRequests: totalRequests,
+        rankingTotalTokens: totalTokens,
+      },
+      global: {
+        stubs: {
+          LoadingSpinner: true,
+        },
+      },
+    })
+
+    const rankingButton = wrapper.findAll('button').find((button) => button.text() === 'User Spending Ranking')
+    expect(rankingButton).toBeTruthy()
+    await rankingButton!.trigger('click')
+    await wrapper.vm.$nextTick()
+
+    let rows = wrapper.findAll('tbody tr')
+    expect(rows).toHaveLength(6)
+    expect(rows.some((row) => row.text().includes('zero@example.com'))).toBe(false)
+    expect(wrapper.text()).toContain('Page 1 / 2')
+
+    const nextButton = wrapper.findAll('button').find((button) => button.text() === 'Next')
+    expect(nextButton).toBeTruthy()
+    await nextButton!.trigger('click')
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.text()).toContain('Page 2 / 2')
+    rows = wrapper.findAll('tbody tr')
+    expect(rows[0].text()).toContain('#6')
+    expect(rows[rows.length - 1].text()).toContain('Others')
+
+    const collapseButton = wrapper.findAll('button').find((button) => button.text() === 'Collapse Ranking')
+    expect(collapseButton).toBeTruthy()
+    await collapseButton!.trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.text()).toContain('The ranking is hidden.')
+
+    const expandButton = wrapper.findAll('button').find((button) => button.text() === 'Expand Ranking')
+    expect(expandButton).toBeTruthy()
+    await expandButton!.trigger('click')
+    await wrapper.vm.$nextTick()
+
+    rows = wrapper.findAll('tbody tr')
+    expect(rows.length).toBeGreaterThan(0)
   })
 })

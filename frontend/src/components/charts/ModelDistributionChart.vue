@@ -93,6 +93,36 @@
             {{ t('admin.dashboard.viewSpendingRanking') }}
           </button>
         </div>
+        <button
+          v-if="enableRankingView && activeView === 'spending_ranking'"
+          type="button"
+          class="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:text-gray-900 dark:border-gray-700 dark:bg-dark-700 dark:text-gray-300 dark:hover:text-white"
+          @click="rankingCollapsed = !rankingCollapsed"
+        >
+          <svg
+            v-if="rankingCollapsed"
+            class="h-3 w-3"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+          </svg>
+          <svg
+            v-else
+            class="h-3 w-3"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+          </svg>
+          <span>
+            {{ rankingCollapsed
+              ? t('admin.dashboard.spendingRankingExpand')
+              : t('admin.dashboard.spendingRankingCollapse') }}
+          </span>
+        </button>
       </div>
     </div>
 
@@ -175,6 +205,12 @@
     >
       {{ t('admin.dashboard.failedToLoad') }}
     </div>
+    <div
+      v-else-if="rankingCollapsed"
+      class="flex h-48 items-center justify-center text-sm text-gray-500 dark:text-gray-400"
+    >
+      {{ t('admin.dashboard.spendingRankingCollapsed') }}
+    </div>
     <div v-else-if="rankingDisplayItems.length > 0 && rankingChartData" class="flex items-center gap-6">
       <div class="h-48 w-48">
         <Doughnut :data="rankingChartData" :options="rankingDoughnutOptions" />
@@ -202,7 +238,7 @@
               <td class="py-1.5">
                 <div class="flex min-w-0 items-center gap-2">
                   <span class="shrink-0 text-[11px] font-semibold text-gray-500 dark:text-gray-400">
-                    {{ item.isOther ? 'Σ' : `#${index + 1}` }}
+                    {{ item.isOther ? 'Σ' : getRankingPositionLabel(index) }}
                   </span>
                   <span
                     class="block max-w-[140px] truncate font-medium text-gray-900 dark:text-white"
@@ -224,6 +260,36 @@
             </tr>
           </tbody>
         </table>
+        <div
+          v-if="rankingHasPagination"
+          class="mt-3 flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400"
+        >
+          <button
+            type="button"
+            class="inline-flex items-center gap-1 rounded-md border border-transparent px-2 py-1 font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            :class="rankingPage === 1
+              ? 'text-gray-400 dark:text-gray-500'
+              : 'text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white'"
+            :disabled="rankingPage === 1"
+            @click="goToPreviousRankingPage"
+          >
+            {{ t('admin.dashboard.spendingRankingPrevious') }}
+          </button>
+          <span>
+            {{ t('admin.dashboard.spendingRankingPageInfo', { page: rankingPage, total: totalRankingPages }) }}
+          </span>
+          <button
+            type="button"
+            class="inline-flex items-center gap-1 rounded-md border border-transparent px-2 py-1 font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            :class="rankingPage === totalRankingPages
+              ? 'text-gray-400 dark:text-gray-500'
+              : 'text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white'"
+            :disabled="rankingPage === totalRankingPages"
+            @click="goToNextRankingPage"
+          >
+            {{ t('admin.dashboard.spendingRankingNext') }}
+          </button>
+        </div>
       </div>
     </div>
     <div
@@ -236,7 +302,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js'
 import { Doughnut } from 'vue-chartjs'
@@ -323,6 +389,15 @@ const emit = defineEmits<{
 
 const enableRankingView = computed(() => props.enableRankingView)
 const activeView = ref<'model_distribution' | 'spending_ranking'>('model_distribution')
+const rankingCollapsed = ref(false)
+const rankingPage = ref(1)
+const rankingPageSize = 5
+
+watch(activeView, (view) => {
+  if (view !== 'spending_ranking') {
+    rankingCollapsed.value = false
+  }
+})
 
 const chartColors = [
   '#3b82f6',
@@ -366,12 +441,53 @@ const chartData = computed(() => {
   }
 })
 
-const rankingChartData = computed(() => {
-  if (!props.rankingItems?.length) return null
+const filteredRankingItems = computed(() => {
+  if (!props.rankingItems?.length) return []
+  return props.rankingItems.filter((item) => (item.actual_cost ?? 0) > 0)
+})
 
-  const labels = props.rankingItems.map((item, index) => `#${index + 1} ${getRankingUserLabel(item)}`)
-  const data = props.rankingItems.map((item) => item.actual_cost)
-  const backgroundColor = chartColors.slice(0, props.rankingItems.length)
+const totalRankingPages = computed(() => {
+  if (!filteredRankingItems.value.length) return 1
+  return Math.max(1, Math.ceil(filteredRankingItems.value.length / rankingPageSize))
+})
+
+const rankingHasPagination = computed(() => filteredRankingItems.value.length > rankingPageSize)
+
+const paginatedRankingItems = computed(() => {
+  if (!filteredRankingItems.value.length) return []
+  const startIndex = (rankingPage.value - 1) * rankingPageSize
+  return filteredRankingItems.value.slice(startIndex, startIndex + rankingPageSize)
+})
+
+watch(filteredRankingItems, () => {
+  rankingPage.value = 1
+})
+
+watch(totalRankingPages, (total) => {
+  if (rankingPage.value > total) {
+    rankingPage.value = total
+  }
+})
+
+const goToPreviousRankingPage = () => {
+  if (rankingPage.value > 1) {
+    rankingPage.value -= 1
+  }
+}
+
+const goToNextRankingPage = () => {
+  if (rankingPage.value < totalRankingPages.value) {
+    rankingPage.value += 1
+  }
+}
+
+const rankingChartData = computed(() => {
+  const baseItems = filteredRankingItems.value
+  if (!baseItems.length && !otherRankingItem.value) return null
+
+  const labels = baseItems.map((item, index) => `#${index + 1} ${getRankingUserLabel(item)}`)
+  const data = baseItems.map((item) => item.actual_cost)
+  const backgroundColor = chartColors.slice(0, baseItems.length)
 
   if (otherRankingItem.value) {
     labels.push(t('admin.dashboard.spendingRankingOther'))
@@ -392,11 +508,11 @@ const rankingChartData = computed(() => {
 })
 
 const otherRankingItem = computed<RankingDisplayItem | null>(() => {
-  if (!props.rankingItems?.length) return null
+  if (!filteredRankingItems.value.length) return null
 
-  const rankedActualCost = props.rankingItems.reduce((sum, item) => sum + item.actual_cost, 0)
-  const rankedRequests = props.rankingItems.reduce((sum, item) => sum + item.requests, 0)
-  const rankedTokens = props.rankingItems.reduce((sum, item) => sum + item.tokens, 0)
+  const rankedActualCost = filteredRankingItems.value.reduce((sum, item) => sum + item.actual_cost, 0)
+  const rankedRequests = filteredRankingItems.value.reduce((sum, item) => sum + item.requests, 0)
+  const rankedTokens = filteredRankingItems.value.reduce((sum, item) => sum + item.tokens, 0)
 
   const otherActualCost = Math.max((props.rankingTotalActualCost || 0) - rankedActualCost, 0)
   const otherRequests = Math.max((props.rankingTotalRequests || 0) - rankedRequests, 0)
@@ -415,10 +531,11 @@ const otherRankingItem = computed<RankingDisplayItem | null>(() => {
 })
 
 const rankingDisplayItems = computed<RankingDisplayItem[]>(() => {
-  if (!props.rankingItems?.length) return []
+  const currentPageItems = paginatedRankingItems.value
+  if (!currentPageItems.length && !otherRankingItem.value) return []
   return otherRankingItem.value
-    ? [...props.rankingItems, otherRankingItem.value]
-    : [...props.rankingItems]
+    ? [...currentPageItems, otherRankingItem.value]
+    : [...currentPageItems]
 })
 
 const doughnutOptions = computed(() => ({
@@ -463,6 +580,11 @@ const rankingDoughnutOptions = computed(() => ({
     }
   }
 }))
+
+const getRankingPositionLabel = (index: number): string => {
+  const rankNumber = (rankingPage.value - 1) * rankingPageSize + index + 1
+  return `#${rankNumber}`
+}
 
 const formatTokens = (value: number): string => {
   if (value >= 1_000_000_000) {
