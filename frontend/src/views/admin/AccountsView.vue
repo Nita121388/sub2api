@@ -79,9 +79,40 @@
                   {{ t('admin.accounts.overview.spendHint') }}
                 </p>
               </div>
-              <span class="text-xs text-gray-500 dark:text-gray-400">
-                {{ t('admin.accounts.overview.topCount', { count: accountSpendLeaderboard.length }) }}
-              </span>
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.accounts.overview.topCount', { count: accountSpendLeaderboard.length }) }}
+                </span>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:text-gray-900 dark:border-gray-700 dark:bg-dark-700 dark:text-gray-300 dark:hover:text-white"
+                  @click="accountSpendCollapsed = !accountSpendCollapsed"
+                >
+                  <svg
+                    v-if="accountSpendCollapsed"
+                    class="h-3 w-3"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+                  </svg>
+                  <svg
+                    v-else
+                    class="h-3 w-3"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                  <span>
+                    {{ accountSpendCollapsed
+                      ? t('admin.accounts.overview.spendExpand')
+                      : t('admin.accounts.overview.spendCollapse') }}
+                  </span>
+                </button>
+              </div>
             </div>
 
             <div
@@ -103,6 +134,13 @@
               class="rounded-xl border border-dashed border-gray-200 px-4 py-6 text-sm text-gray-500 dark:border-dark-700 dark:text-gray-400"
             >
               {{ t('admin.accounts.overview.noSpendData') }}
+            </div>
+
+            <div
+              v-else-if="accountSpendCollapsed"
+              class="rounded-xl border border-dashed border-gray-200 px-4 py-6 text-sm text-gray-500 dark:border-dark-700 dark:text-gray-400"
+            >
+              {{ t('admin.accounts.overview.spendCollapsed') }}
             </div>
 
             <div v-else class="space-y-2">
@@ -528,7 +566,7 @@ import ReAuthAccountModal from '@/components/admin/account/ReAuthAccountModal.vu
 import AccountTestModal from '@/components/admin/account/AccountTestModal.vue'
 import AccountStatsModal from '@/components/admin/account/AccountStatsModal.vue'
 import ScheduledTestsPanel from '@/components/admin/account/ScheduledTestsPanel.vue'
-import type { SelectOption } from '@/components/common/Select.vue'
+import Select, { type SelectOption } from '@/components/common/Select.vue'
 import AccountStatusIndicator from '@/components/account/AccountStatusIndicator.vue'
 import AccountUsageCell from '@/components/account/AccountUsageCell.vue'
 import AccountTodayStatsCell from '@/components/account/AccountTodayStatsCell.vue'
@@ -587,6 +625,7 @@ const statsAcc = ref<Account | null>(null)
 const showSchedulePanel = ref(false)
 const scheduleAcc = ref<Account | null>(null)
 const scheduleModelOptions = ref<SelectOption[]>([])
+const accountSpendCollapsed = ref(false)
 const togglingSchedulable = ref<number | null>(null)
 const menu = reactive<{show:boolean, acc:Account|null, pos:{top:number, left:number}|null}>({ show: false, acc: null, pos: null })
 const exportingData = ref(false)
