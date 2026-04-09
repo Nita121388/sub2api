@@ -1138,6 +1138,119 @@ func (h *AccountHandler) BatchRefresh(c *gin.Context) {
 	})
 }
 
+// BatchTest handles batch testing account connectivity.
+// POST /api/v1/admin/accounts/batch-test
+func (h *AccountHandler) BatchTest(c *gin.Context) {
+	var req struct {
+		AccountIDs []int64 `json:"account_ids"`
+		ModelID    string  `json:"model_id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	if len(req.AccountIDs) == 0 {
+		response.BadRequest(c, "account_ids is required")
+		return
+	}
+
+	ctx := c.Request.Context()
+	const maxConcurrency = 5
+
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(maxConcurrency)
+
+	var mu sync.Mutex
+	var successCount, failedCount int
+	errorsList := make([]gin.H, 0)
+	warnings := make([]gin.H, 0)
+	results := make([]gin.H, 0, len(req.AccountIDs))
+
+	for _, id := range req.AccountIDs {
+		accountID := id
+		g.Go(func() error {
+			testResult, err := h.accountTestService.RunTestBackground(gctx, accountID, req.ModelID)
+			if err != nil {
+				mu.Lock()
+				failedCount++
+				errorsList = append(errorsList, gin.H{
+					"account_id": accountID,
+					"error":      err.Error(),
+				})
+				results = append(results, gin.H{
+					"account_id": accountID,
+					"success":    false,
+					"error":      err.Error(),
+				})
+				mu.Unlock()
+				return nil
+			}
+
+			if testResult == nil || testResult.Status != "success" {
+				errMsg := ""
+				latencyMs := int64(0)
+				if testResult != nil {
+					errMsg = strings.TrimSpace(testResult.ErrorMessage)
+					latencyMs = testResult.LatencyMs
+				}
+				if errMsg == "" {
+					errMsg = "account test failed"
+				}
+				mu.Lock()
+				failedCount++
+				errorsList = append(errorsList, gin.H{
+					"account_id": accountID,
+					"error":      errMsg,
+				})
+				results = append(results, gin.H{
+					"account_id": accountID,
+					"success":    false,
+					"error":      errMsg,
+					"latency_ms": latencyMs,
+				})
+				mu.Unlock()
+				return nil
+			}
+
+			mu.Lock()
+			successCount++
+			results = append(results, gin.H{
+				"account_id": accountID,
+				"success":    true,
+				"latency_ms": testResult.LatencyMs,
+			})
+			mu.Unlock()
+
+			if h.rateLimitService != nil {
+				if _, recoverErr := h.rateLimitService.RecoverAccountAfterSuccessfulTest(gctx, accountID); recoverErr != nil {
+					mu.Lock()
+					warnings = append(warnings, gin.H{
+						"account_id": accountID,
+						"warning":    recoverErr.Error(),
+					})
+					mu.Unlock()
+				}
+			}
+
+			return nil
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, gin.H{
+		"total":    len(req.AccountIDs),
+		"success":  successCount,
+		"failed":   failedCount,
+		"errors":   errorsList,
+		"warnings": warnings,
+		"results":  results,
+	})
+}
+
 // BatchCreate handles batch creating accounts
 // POST /api/v1/admin/accounts/batch
 func (h *AccountHandler) BatchCreate(c *gin.Context) {

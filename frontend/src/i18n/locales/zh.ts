@@ -2386,6 +2386,12 @@ export default {
         disableScheduling: '批量停止调度',
         resetStatus: '批量重置状态',
         refreshToken: '批量刷新令牌',
+        batchTest: '批量测试',
+        testing: '批量测试中...',
+        batchTestConfirm: '确定要对选中的 {count} 个账号执行连通性测试吗？',
+        batchTestSuccess: '批量测试完成，共成功 {count} 个账号',
+        batchTestPartial: '批量测试部分完成：成功 {success} 个，失败 {failed} 个',
+        batchTestFailed: '批量测试失败',
         resetStatusSuccess: '已成功重置 {count} 个账号状态',
         refreshTokenSuccess: '已成功刷新 {count} 个账号令牌',
         partialSuccess: '操作部分完成：{success} 成功，{failed} 失败'

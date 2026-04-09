@@ -306,7 +306,7 @@
         </div>
       </template>
       <template #table>
-        <AccountBulkActionsBar :selected-ids="selIds" @delete="handleBulkDelete" @reset-status="handleBulkResetStatus" @refresh-token="handleBulkRefreshToken" @edit="showBulkEdit = true" @clear="clearSelection" @select-page="selectPage" @toggle-schedulable="handleBulkToggleSchedulable" />
+        <AccountBulkActionsBar :selected-ids="selIds" :batch-testing="batchTesting" @delete="handleBulkDelete" @reset-status="handleBulkResetStatus" @refresh-token="handleBulkRefreshToken" @batch-test="handleBulkTest" @edit="showBulkEdit = true" @clear="clearSelection" @select-page="selectPage" @toggle-schedulable="handleBulkToggleSchedulable" />
         <div ref="accountTableRef" class="flex min-h-0 flex-1 flex-col overflow-hidden">
         <DataTable
           :columns="cols"
@@ -626,6 +626,7 @@ const showSchedulePanel = ref(false)
 const scheduleAcc = ref<Account | null>(null)
 const scheduleModelOptions = ref<SelectOption[]>([])
 const accountSpendCollapsed = ref(false)
+const batchTesting = ref(false)
 const togglingSchedulable = ref<number | null>(null)
 const menu = reactive<{show:boolean, acc:Account|null, pos:{top:number, left:number}|null}>({ show: false, acc: null, pos: null })
 const exportingData = ref(false)
@@ -1391,6 +1392,42 @@ const handleBulkRefreshToken = async () => {
   } catch (error) {
     console.error('Failed to bulk refresh token:', error)
     appStore.showError(String(error))
+  }
+}
+const handleBulkTest = async () => {
+  const selectedIds = [...selIds.value]
+  if (selectedIds.length === 0) return
+  if (batchTesting.value) return
+  if (!confirm(t('admin.accounts.bulkActions.batchTestConfirm', { count: selectedIds.length }))) return
+
+  try {
+    batchTesting.value = true
+    const result = await adminAPI.accounts.batchTest(
+      selectedIds,
+      quickTestPreference.value?.id
+    )
+    if (result.failed > 0) {
+      appStore.showError(t('admin.accounts.bulkActions.batchTestPartial', {
+        success: result.success,
+        failed: result.failed
+      }))
+      if (result.errors && result.errors.length > 0) {
+        const firstError = result.errors[0]
+        appStore.showError(`#${firstError.account_id}: ${firstError.error}`)
+      }
+      return
+    }
+
+    appStore.showSuccess(t('admin.accounts.bulkActions.batchTestSuccess', {
+      count: result.success
+    }))
+    clearSelection()
+  } catch (error: any) {
+    console.error('Failed to batch test accounts:', error)
+    appStore.showError(error?.response?.data?.detail || t('admin.accounts.bulkActions.batchTestFailed'))
+  } finally {
+    batchTesting.value = false
+    enterAutoRefreshSilentWindow()
   }
 }
 const updateSchedulableInList = (accountIds: number[], schedulable: boolean) => {

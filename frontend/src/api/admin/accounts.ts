@@ -595,6 +595,15 @@ export interface BatchOperationResult {
   warnings?: Array<{ account_id: number; warning: string }>
 }
 
+export interface BatchTestResult extends BatchOperationResult {
+  results?: Array<{
+    account_id: number
+    success: boolean
+    error?: string
+    latency_ms?: number
+  }>
+}
+
 /**
  * Batch clear account errors
  * @param accountIds - Array of account IDs
@@ -617,6 +626,28 @@ export async function batchRefresh(accountIds: number[]): Promise<BatchOperation
     account_ids: accountIds,
   }, {
     timeout: 120000  // 120s timeout for large batch refreshes
+  })
+  return data
+}
+
+/**
+ * Batch test account connectivity
+ * @param accountIds - Array of account IDs
+ * @param modelId - Optional test model ID
+ * @returns Batch operation result
+ */
+export async function batchTest(accountIds: number[], modelId?: string): Promise<BatchTestResult> {
+  const payload: {
+    account_ids: number[]
+    model_id?: string
+  } = {
+    account_ids: accountIds
+  }
+  if (modelId) {
+    payload.model_id = modelId
+  }
+  const { data } = await apiClient.post<BatchTestResult>('/admin/accounts/batch-test', payload, {
+    timeout: 300000  // 300s timeout for batch test execution
   })
   return data
 }
@@ -657,7 +688,8 @@ export const accountsAPI = {
   importData,
   getAntigravityDefaultModelMapping,
   batchClearError,
-  batchRefresh
+  batchRefresh,
+  batchTest
 }
 
 export default accountsAPI

@@ -2236,6 +2236,12 @@ export default {
         disableScheduling: 'Disable Scheduling',
         resetStatus: 'Reset Status',
         refreshToken: 'Refresh Token',
+        batchTest: 'Batch Test',
+        testing: 'Batch Testing...',
+        batchTestConfirm: 'Run connectivity tests for selected {count} account(s)?',
+        batchTestSuccess: 'Batch test completed for {count} account(s)',
+        batchTestPartial: 'Batch test partially completed: {success} succeeded, {failed} failed',
+        batchTestFailed: 'Batch test failed',
         resetStatusSuccess: 'Successfully reset {count} account(s) status',
         refreshTokenSuccess: 'Successfully refreshed {count} account(s) token',
         partialSuccess: 'Partially completed: {success} succeeded, {failed} failed'
