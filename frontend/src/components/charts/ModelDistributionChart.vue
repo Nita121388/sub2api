@@ -336,6 +336,7 @@ const props = withDefaults(defineProps<{
   rankingError?: boolean
   startDate?: string
   endDate?: string
+  filters?: Record<string, any>
 }>(), {
   upstreamModelStats: () => [],
   mappingModelStats: () => [],
@@ -368,6 +369,7 @@ const toggleBreakdown = async (type: string, id: string) => {
   breakdownItems.value = []
   try {
     const res = await getUserBreakdown({
+      ...props.filters,
       start_date: props.startDate,
       end_date: props.endDate,
       model: id,

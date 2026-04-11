@@ -68,12 +68,6 @@ func RegisterUserRoutes(
 			usage.POST("/dashboard/api-keys-usage", h.Usage.DashboardAPIKeysUsage)
 		}
 
-		requestLogs := authenticated.Group("/request-logs")
-		{
-			requestLogs.GET("", h.RequestLog.List)
-			requestLogs.GET("/:id", h.RequestLog.GetByID)
-		}
-
 		// 公告（用户可见）
 		announcements := authenticated.Group("/announcements")
 		{

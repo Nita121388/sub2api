@@ -9,8 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -220,17 +220,15 @@ func (h *AccountHandler) List(c *gin.Context) {
 	accountType := c.Query("type")
 	status := c.Query("status")
 	search := c.Query("search")
+	privacyMode := strings.TrimSpace(c.Query("privacy_mode"))
+	sortBy := c.DefaultQuery("sort_by", "name")
+	sortOrder := c.DefaultQuery("sort_order", "asc")
 	// 标准化和验证 search 参数
 	search = strings.TrimSpace(search)
 	if len(search) > 100 {
 		search = search[:100]
 	}
 	lite := parseBoolQueryWithDefault(c.Query("lite"), false)
-	schedulable, schedulableFilter, schedulableParseErr := parseOptionalBoolFilter(c.Query("schedulable"))
-	if schedulableParseErr != nil {
-		response.ErrorFrom(c, infraerrors.BadRequest("INVALID_SCHEDULABLE_FILTER", "invalid schedulable filter"))
-		return
-	}
 
 	var groupID int64
 	if groupIDStr := c.Query("group"); groupIDStr != "" {
@@ -250,7 +248,7 @@ func (h *AccountHandler) List(c *gin.Context) {
 		}
 	}
 
-	accounts, total, err := h.adminService.ListAccounts(c.Request.Context(), page, pageSize, platform, accountType, status, search, groupID, schedulable)
+	accounts, total, err := h.adminService.ListAccounts(c.Request.Context(), page, pageSize, platform, accountType, status, search, groupID, privacyMode, sortBy, sortOrder)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -372,7 +370,7 @@ func (h *AccountHandler) List(c *gin.Context) {
 		result[i] = item
 	}
 
-	etag := buildAccountsListETag(result, total, page, pageSize, platform, accountType, status, search, schedulableFilter, lite)
+	etag := buildAccountsListETag(result, total, page, pageSize, platform, accountType, status, search, lite)
 	if etag != "" {
 		c.Header("ETag", etag)
 		c.Header("Vary", "If-None-Match")
@@ -389,7 +387,7 @@ func buildAccountsListETag(
 	items []AccountWithConcurrency,
 	total int64,
 	page, pageSize int,
-	platform, accountType, status, search, schedulable string,
+	platform, accountType, status, search string,
 	lite bool,
 ) string {
 	payload := struct {
@@ -400,7 +398,6 @@ func buildAccountsListETag(
 		AccountType string                   `json:"type"`
 		Status      string                   `json:"status"`
 		Search      string                   `json:"search"`
-		Schedulable string                   `json:"schedulable"`
 		Lite        bool                     `json:"lite"`
 		Items       []AccountWithConcurrency `json:"items"`
 	}{
@@ -411,7 +408,6 @@ func buildAccountsListETag(
 		AccountType: accountType,
 		Status:      status,
 		Search:      search,
-		Schedulable: schedulable,
 		Lite:        lite,
 		Items:       items,
 	}
@@ -440,22 +436,6 @@ func ifNoneMatchMatched(ifNoneMatch, etag string) bool {
 		}
 	}
 	return false
-}
-
-func parseOptionalBoolFilter(raw string) (*bool, string, error) {
-	value := strings.TrimSpace(strings.ToLower(raw))
-	switch value {
-	case "":
-		return nil, "", nil
-	case "1", "true", "yes", "on":
-		v := true
-		return &v, "true", nil
-	case "0", "false", "no", "off":
-		v := false
-		return &v, "false", nil
-	default:
-		return nil, "", fmt.Errorf("invalid bool filter")
-	}
 }
 
 // GetByID handles getting an account by ID
@@ -559,6 +539,10 @@ func (h *AccountHandler) Create(c *gin.Context) {
 		if execErr != nil {
 			return nil, execErr
 		}
+		// Antigravity OAuth: 新账号直接设置隐私
+		h.adminService.ForceAntigravityPrivacy(ctx, account)
+		// OpenAI OAuth: 新账号直接设置隐私
+		h.adminService.ForceOpenAIPrivacy(ctx, account)
 		return h.buildAccountResponseWithRuntime(ctx, account), nil
 	})
 	if err != nil {
@@ -805,6 +789,8 @@ func (h *AccountHandler) refreshSingleAccount(ctx context.Context, account *serv
 	if account.IsOpenAI() {
 		tokenInfo, err := h.openaiOAuthService.RefreshAccountToken(ctx, account)
 		if err != nil {
+			// 刷新失败但 access_token 可能仍有效，尝试设置隐私
+			h.adminService.EnsureOpenAIPrivacy(ctx, account)
 			return nil, "", err
 		}
 
@@ -855,6 +841,7 @@ func (h *AccountHandler) refreshSingleAccount(ctx context.Context, account *serv
 			if updateErr != nil {
 				return nil, "", fmt.Errorf("failed to update credentials: %w", updateErr)
 			}
+			h.adminService.EnsureAntigravityPrivacy(ctx, updatedAccount)
 			return updatedAccount, "missing_project_id_temporary", nil
 		}
 
@@ -906,6 +893,8 @@ func (h *AccountHandler) refreshSingleAccount(ctx context.Context, account *serv
 
 	// OpenAI OAuth: 刷新成功后检查并设置 privacy_mode
 	h.adminService.EnsureOpenAIPrivacy(ctx, updatedAccount)
+	// Antigravity OAuth: 刷新成功后检查并设置 privacy_mode
+	h.adminService.EnsureAntigravityPrivacy(ctx, updatedAccount)
 
 	return updatedAccount, "", nil
 }
@@ -1162,119 +1151,6 @@ func (h *AccountHandler) BatchRefresh(c *gin.Context) {
 	})
 }
 
-// BatchTest handles batch testing account connectivity.
-// POST /api/v1/admin/accounts/batch-test
-func (h *AccountHandler) BatchTest(c *gin.Context) {
-	var req struct {
-		AccountIDs []int64 `json:"account_ids"`
-		ModelID    string  `json:"model_id"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "Invalid request: "+err.Error())
-		return
-	}
-	if len(req.AccountIDs) == 0 {
-		response.BadRequest(c, "account_ids is required")
-		return
-	}
-
-	ctx := c.Request.Context()
-	const maxConcurrency = 5
-
-	g, gctx := errgroup.WithContext(ctx)
-	g.SetLimit(maxConcurrency)
-
-	var mu sync.Mutex
-	var successCount, failedCount int
-	errorsList := make([]gin.H, 0)
-	warnings := make([]gin.H, 0)
-	results := make([]gin.H, 0, len(req.AccountIDs))
-
-	for _, id := range req.AccountIDs {
-		accountID := id
-		g.Go(func() error {
-			testResult, err := h.accountTestService.RunTestBackground(gctx, accountID, req.ModelID)
-			if err != nil {
-				mu.Lock()
-				failedCount++
-				errorsList = append(errorsList, gin.H{
-					"account_id": accountID,
-					"error":      err.Error(),
-				})
-				results = append(results, gin.H{
-					"account_id": accountID,
-					"success":    false,
-					"error":      err.Error(),
-				})
-				mu.Unlock()
-				return nil
-			}
-
-			if testResult == nil || testResult.Status != "success" {
-				errMsg := ""
-				latencyMs := int64(0)
-				if testResult != nil {
-					errMsg = strings.TrimSpace(testResult.ErrorMessage)
-					latencyMs = testResult.LatencyMs
-				}
-				if errMsg == "" {
-					errMsg = "account test failed"
-				}
-				mu.Lock()
-				failedCount++
-				errorsList = append(errorsList, gin.H{
-					"account_id": accountID,
-					"error":      errMsg,
-				})
-				results = append(results, gin.H{
-					"account_id": accountID,
-					"success":    false,
-					"error":      errMsg,
-					"latency_ms": latencyMs,
-				})
-				mu.Unlock()
-				return nil
-			}
-
-			mu.Lock()
-			successCount++
-			results = append(results, gin.H{
-				"account_id": accountID,
-				"success":    true,
-				"latency_ms": testResult.LatencyMs,
-			})
-			mu.Unlock()
-
-			if h.rateLimitService != nil {
-				if _, recoverErr := h.rateLimitService.RecoverAccountAfterSuccessfulTest(gctx, accountID); recoverErr != nil {
-					mu.Lock()
-					warnings = append(warnings, gin.H{
-						"account_id": accountID,
-						"warning":    recoverErr.Error(),
-					})
-					mu.Unlock()
-				}
-			}
-
-			return nil
-		})
-	}
-
-	if err := g.Wait(); err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-
-	response.Success(c, gin.H{
-		"total":    len(req.AccountIDs),
-		"success":  successCount,
-		"failed":   failedCount,
-		"errors":   errorsList,
-		"warnings": warnings,
-		"results":  results,
-	})
-}
-
 // BatchCreate handles batch creating accounts
 // POST /api/v1/admin/accounts/batch
 func (h *AccountHandler) BatchCreate(c *gin.Context) {
@@ -1290,6 +1166,9 @@ func (h *AccountHandler) BatchCreate(c *gin.Context) {
 		success := 0
 		failed := 0
 		results := make([]gin.H, 0, len(req.Accounts))
+		// 收集需要异步设置隐私的 OAuth 账号
+		var antigravityPrivacyAccounts []*service.Account
+		var openaiPrivacyAccounts []*service.Account
 
 		for _, item := range req.Accounts {
 			if item.RateMultiplier != nil && *item.RateMultiplier < 0 {
@@ -1332,12 +1211,52 @@ func (h *AccountHandler) BatchCreate(c *gin.Context) {
 				})
 				continue
 			}
+			// 收集需要异步设置隐私的 OAuth 账号
+			if account.Type == service.AccountTypeOAuth {
+				switch account.Platform {
+				case service.PlatformAntigravity:
+					antigravityPrivacyAccounts = append(antigravityPrivacyAccounts, account)
+				case service.PlatformOpenAI:
+					openaiPrivacyAccounts = append(openaiPrivacyAccounts, account)
+				}
+			}
 			success++
 			results = append(results, gin.H{
 				"name":    item.Name,
 				"id":      account.ID,
 				"success": true,
 			})
+		}
+
+		// 异步设置隐私，避免批量创建时阻塞请求
+		adminSvc := h.adminService
+		if len(antigravityPrivacyAccounts) > 0 {
+			accounts := antigravityPrivacyAccounts
+			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						slog.Error("batch_create_antigravity_privacy_panic", "recover", r)
+					}
+				}()
+				bgCtx := context.Background()
+				for _, acc := range accounts {
+					adminSvc.ForceAntigravityPrivacy(bgCtx, acc)
+				}
+			}()
+		}
+		if len(openaiPrivacyAccounts) > 0 {
+			accounts := openaiPrivacyAccounts
+			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						slog.Error("batch_create_openai_privacy_panic", "recover", r)
+					}
+				}()
+				bgCtx := context.Background()
+				for _, acc := range accounts {
+					adminSvc.ForceOpenAIPrivacy(bgCtx, acc)
+				}
+			}()
 		}
 
 		return gin.H{
@@ -1785,14 +1704,6 @@ type BatchTodayStatsRequest struct {
 	AccountIDs []int64 `json:"account_ids" binding:"required"`
 }
 
-type TodaySpendLeaderboardEntry struct {
-	ID       int64   `json:"id"`
-	Name     string  `json:"name"`
-	Platform string  `json:"platform"`
-	Cost     float64 `json:"cost"`
-	Requests int64   `json:"requests"`
-}
-
 // GetBatchTodayStats 批量获取多个账号的今日统计。
 // POST /api/v1/admin/accounts/today-stats/batch
 func (h *AccountHandler) GetBatchTodayStats(c *gin.Context) {
@@ -1837,106 +1748,6 @@ func (h *AccountHandler) GetBatchTodayStats(c *gin.Context) {
 	}
 	c.Header("X-Snapshot-Cache", "miss")
 	response.Success(c, payload)
-}
-
-// GetTodaySpendLeaderboard returns top spend accounts for today, independent from table filters/pagination.
-// GET /api/v1/admin/accounts/today-stats/leaderboard
-func (h *AccountHandler) GetTodaySpendLeaderboard(c *gin.Context) {
-	limit := 5
-	if raw := strings.TrimSpace(c.Query("limit")); raw != "" {
-		parsed, err := strconv.Atoi(raw)
-		if err != nil || parsed <= 0 {
-			response.BadRequest(c, "Invalid limit")
-			return
-		}
-		if parsed > 20 {
-			parsed = 20
-		}
-		limit = parsed
-	}
-
-	cacheKey := buildAccountTodaySpendLeaderboardCacheKey(limit)
-	cached, hit, err := accountTodaySpendLeaderboardCache.GetOrLoad(cacheKey, func() (any, error) {
-		accounts := make([]service.Account, 0)
-		const pageSize = 1000
-		for page := 1; ; page++ {
-			batch, total, listErr := h.adminService.ListAccounts(c.Request.Context(), page, pageSize, "", "", "", "", 0, nil)
-			if listErr != nil {
-				return nil, listErr
-			}
-			if len(batch) == 0 {
-				break
-			}
-			accounts = append(accounts, batch...)
-			if int64(len(accounts)) >= total {
-				break
-			}
-		}
-
-		if len(accounts) == 0 {
-			return gin.H{"items": []TodaySpendLeaderboardEntry{}}, nil
-		}
-
-		accountIDs := make([]int64, 0, len(accounts))
-		for i := range accounts {
-			accountIDs = append(accountIDs, accounts[i].ID)
-		}
-
-		statsByAccountID, statsErr := h.accountUsageService.GetTodayStatsBatch(c.Request.Context(), accountIDs)
-		if statsErr != nil {
-			return nil, statsErr
-		}
-
-		items := make([]TodaySpendLeaderboardEntry, 0, len(accounts))
-		for i := range accounts {
-			acc := accounts[i]
-			stats := statsByAccountID[acc.ID]
-			entry := TodaySpendLeaderboardEntry{
-				ID:       acc.ID,
-				Name:     acc.Name,
-				Platform: string(acc.Platform),
-			}
-			if stats != nil {
-				entry.Cost = stats.Cost
-				entry.Requests = stats.Requests
-			}
-			items = append(items, entry)
-		}
-
-		sort.Slice(items, func(i, j int) bool {
-			if items[i].Cost != items[j].Cost {
-				return items[i].Cost > items[j].Cost
-			}
-			if items[i].Requests != items[j].Requests {
-				return items[i].Requests > items[j].Requests
-			}
-			return items[i].Name < items[j].Name
-		})
-
-		if len(items) > limit {
-			items = items[:limit]
-		}
-		return gin.H{"items": items}, nil
-	})
-	if err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-
-	if cached.ETag != "" {
-		c.Header("ETag", cached.ETag)
-		c.Header("Vary", "If-None-Match")
-		if ifNoneMatchMatched(c.GetHeader("If-None-Match"), cached.ETag) {
-			c.Status(http.StatusNotModified)
-			return
-		}
-	}
-	if hit {
-		c.Header("X-Snapshot-Cache", "hit")
-	} else {
-		c.Header("X-Snapshot-Cache", "miss")
-	}
-	response.Success(c, cached.Payload)
 }
 
 // SetSchedulableRequest represents the request body for setting schedulable status
@@ -2066,12 +1877,6 @@ func (h *AccountHandler) GetAvailableModels(c *gin.Context) {
 		return
 	}
 
-	// Handle Sora accounts
-	if account.Platform == service.PlatformSora {
-		response.Success(c, service.DefaultSoraModels(nil))
-		return
-	}
-
 	// Handle Claude/Anthropic accounts
 	// For OAuth and Setup-Token accounts: return default models
 	if account.IsOAuth() {
@@ -2111,6 +1916,51 @@ func (h *AccountHandler) GetAvailableModels(c *gin.Context) {
 	}
 
 	response.Success(c, models)
+}
+
+// SetPrivacy handles setting privacy for a single OpenAI/Antigravity OAuth account
+// POST /api/v1/admin/accounts/:id/set-privacy
+func (h *AccountHandler) SetPrivacy(c *gin.Context) {
+	accountID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "Invalid account ID")
+		return
+	}
+	account, err := h.adminService.GetAccount(c.Request.Context(), accountID)
+	if err != nil {
+		response.NotFound(c, "Account not found")
+		return
+	}
+	if account.Type != service.AccountTypeOAuth {
+		response.BadRequest(c, "Only OAuth accounts support privacy setting")
+		return
+	}
+	var mode string
+	switch account.Platform {
+	case service.PlatformOpenAI:
+		mode = h.adminService.ForceOpenAIPrivacy(c.Request.Context(), account)
+	case service.PlatformAntigravity:
+		mode = h.adminService.ForceAntigravityPrivacy(c.Request.Context(), account)
+	default:
+		response.BadRequest(c, "Only OpenAI and Antigravity OAuth accounts support privacy setting")
+		return
+	}
+	if mode == "" {
+		response.BadRequest(c, "Cannot set privacy: missing access_token")
+		return
+	}
+	// 从 DB 重新读取以确保返回最新状态
+	updated, err := h.adminService.GetAccount(c.Request.Context(), accountID)
+	if err != nil {
+		// 隐私已设置成功但读取失败，回退到内存更新
+		if account.Extra == nil {
+			account.Extra = make(map[string]any)
+		}
+		account.Extra["privacy_mode"] = mode
+		response.Success(c, h.buildAccountResponseWithRuntime(c.Request.Context(), account))
+		return
+	}
+	response.Success(c, h.buildAccountResponseWithRuntime(c.Request.Context(), updated))
 }
 
 // RefreshTier handles refreshing Google One tier for a single account
@@ -2181,7 +2031,7 @@ func (h *AccountHandler) BatchRefreshTier(c *gin.Context) {
 	accounts := make([]*service.Account, 0)
 
 	if len(req.AccountIDs) == 0 {
-		allAccounts, _, err := h.adminService.ListAccounts(ctx, 1, 10000, "gemini", "oauth", "", "", 0, nil)
+		allAccounts, _, err := h.adminService.ListAccounts(ctx, 1, 10000, "gemini", "oauth", "", "", 0, "", "name", "asc")
 		if err != nil {
 			response.ErrorFrom(c, err)
 			return

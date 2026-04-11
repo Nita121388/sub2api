@@ -63,7 +63,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	firstClientMessage []byte,
 	hooks *OpenAIWSIngressHooks,
 	wsDecision OpenAIWSProtocolDecision,
-) (err error) {
+) error {
 	if s == nil {
 		return errors.New("service is nil")
 	}
@@ -76,24 +76,6 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	if strings.TrimSpace(token) == "" {
 		return errors.New("token is empty")
 	}
-	defer func() {
-		if r := recover(); r != nil {
-			recoveredErr := openaiWSPassthroughPanicError(r)
-			if isOpenAIWSPassthroughClientDisconnectPanic(recoveredErr) {
-				closeStatus, closeReason := summarizeOpenAIWSReadCloseError(recoveredErr)
-				logOpenAIWSV2Passthrough(
-					"relay_panic_recovered account_id=%d close_status=%s close_reason=%s err=%s",
-					account.ID,
-					closeStatus,
-					closeReason,
-					truncateOpenAIWSLogValue(recoveredErr.Error(), openAIWSLogValueMaxLen),
-				)
-				err = nil
-				return
-			}
-			panic(r)
-		}
-	}()
 	requestModel := strings.TrimSpace(gjson.GetBytes(firstClientMessage, "model").String())
 	requestServiceTier := extractOpenAIServiceTierFromBody(firstClientMessage)
 	requestPreviousResponseID := strings.TrimSpace(gjson.GetBytes(firstClientMessage, "previous_response_id").String())
@@ -372,33 +354,6 @@ func relayErrorText(err error) string {
 		return ""
 	}
 	return err.Error()
-}
-
-func openaiWSPassthroughPanicError(recovered any) error {
-	switch v := recovered.(type) {
-	case nil:
-		return errors.New("panic: <nil>")
-	case error:
-		return v
-	case string:
-		return errors.New(v)
-	default:
-		return fmt.Errorf("panic: %v", v)
-	}
-}
-
-func isOpenAIWSPassthroughClientDisconnectPanic(err error) bool {
-	if err == nil {
-		return false
-	}
-	if isOpenAIWSClientDisconnectError(err) {
-		return true
-	}
-	unwrapped := errors.Unwrap(err)
-	if unwrapped == nil {
-		return false
-	}
-	return isOpenAIWSPassthroughClientDisconnectPanic(unwrapped)
 }
 
 func openAIWSFirstTokenMsForLog(firstTokenMs *int) int {

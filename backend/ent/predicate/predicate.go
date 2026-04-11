@@ -30,6 +30,15 @@ type Group func(*sql.Selector)
 // IdempotencyRecord is the predicate function for idempotencyrecord builders.
 type IdempotencyRecord func(*sql.Selector)
 
+// PaymentAuditLog is the predicate function for paymentauditlog builders.
+type PaymentAuditLog func(*sql.Selector)
+
+// PaymentOrder is the predicate function for paymentorder builders.
+type PaymentOrder func(*sql.Selector)
+
+// PaymentProviderInstance is the predicate function for paymentproviderinstance builders.
+type PaymentProviderInstance func(*sql.Selector)
+
 // PromoCode is the predicate function for promocode builders.
 type PromoCode func(*sql.Selector)
 
@@ -42,17 +51,17 @@ type Proxy func(*sql.Selector)
 // RedeemCode is the predicate function for redeemcode builders.
 type RedeemCode func(*sql.Selector)
 
-// RequestLog is the predicate function for requestlog builders.
-type RequestLog func(*sql.Selector)
-
-// RequestLogPayload is the predicate function for requestlogpayload builders.
-type RequestLogPayload func(*sql.Selector)
-
 // SecuritySecret is the predicate function for securitysecret builders.
 type SecuritySecret func(*sql.Selector)
 
 // Setting is the predicate function for setting builders.
 type Setting func(*sql.Selector)
+
+// SubscriptionPlan is the predicate function for subscriptionplan builders.
+type SubscriptionPlan func(*sql.Selector)
+
+// TLSFingerprintProfile is the predicate function for tlsfingerprintprofile builders.
+type TLSFingerprintProfile func(*sql.Selector)
 
 // UsageCleanupTask is the predicate function for usagecleanuptask builders.
 type UsageCleanupTask func(*sql.Selector)

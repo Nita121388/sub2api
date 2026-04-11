@@ -218,31 +218,3 @@ func TestHandleStreamingResponse_SpecialCharactersInJSON(t *testing.T) {
 	body := rec.Body.String()
 	require.Contains(t, body, "content_block_delta", "响应应包含转发的 SSE 事件")
 }
-
-func TestHandleStreamingResponse_CapturesTranscriptAsResponseBody(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	svc := newMinimalGatewayService()
-
-	rec := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(rec)
-	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
-
-	pr, pw := io.Pipe()
-	resp := &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: pr}
-
-	go func() {
-		defer func() { _ = pw.Close() }()
-		_, _ = pw.Write([]byte("event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"role\":\"assistant\",\"usage\":{\"input_tokens\":5}}}\n\n"))
-		_, _ = pw.Write([]byte("event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"hello world\"}}\n\n"))
-		_, _ = pw.Write([]byte("event: message_delta\ndata: {\"type\":\"message_delta\",\"usage\":{\"output_tokens\":3}}\n\n"))
-		_, _ = pw.Write([]byte("data: [DONE]\n\n"))
-	}()
-
-	result, err := svc.handleStreamingResponse(context.Background(), resp, c, &Account{ID: 1}, time.Now(), "model", "model", false)
-	_ = pr.Close()
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.NotEmpty(t, result.responseBody)
-	require.Contains(t, string(result.responseBody), "content_block_delta")
-	require.Contains(t, string(result.responseBody), "hello world")
-}

@@ -7,7 +7,6 @@ import (
 )
 
 var accountTodayStatsBatchCache = newSnapshotCache(30 * time.Second)
-var accountTodaySpendLeaderboardCache = newSnapshotCache(30 * time.Second)
 
 func buildAccountTodayStatsBatchCacheKey(accountIDs []int64) string {
 	if len(accountIDs) == 0 {
@@ -23,11 +22,4 @@ func buildAccountTodayStatsBatchCacheKey(accountIDs []int64) string {
 		_, _ = b.WriteString(strconv.FormatInt(id, 10))
 	}
 	return b.String()
-}
-
-func buildAccountTodaySpendLeaderboardCacheKey(limit int) string {
-	if limit <= 0 {
-		limit = 5
-	}
-	return "accounts_today_spend_leaderboard:" + strconv.Itoa(limit)
 }

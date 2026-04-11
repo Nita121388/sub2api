@@ -41,7 +41,7 @@
         </span>
       </div>
 
-      <div v-if="!isSoraAccount" class="space-y-1.5">
+      <div class="space-y-1.5">
         <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
           {{ t('admin.accounts.selectTestModel') }}
         </label>
@@ -53,12 +53,6 @@
           label-key="display_name"
           :placeholder="loadingModels ? t('common.loading') + '...' : t('admin.accounts.selectTestModel')"
         />
-      </div>
-      <div
-        v-else
-        class="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-300"
-      >
-        {{ t('admin.accounts.soraTestHint') }}
       </div>
 
       <div v-if="supportsGeminiImageTest" class="space-y-1.5">
@@ -152,17 +146,15 @@
         <div class="flex items-center gap-3">
           <span class="flex items-center gap-1">
             <Icon name="grid" size="sm" :stroke-width="2" />
-            {{ isSoraAccount ? t('admin.accounts.soraTestTarget') : t('admin.accounts.testModel') }}
+            {{ t('admin.accounts.testModel') }}
           </span>
         </div>
         <span class="flex items-center gap-1">
           <Icon name="chat" size="sm" :stroke-width="2" />
           {{
-            isSoraAccount
-              ? t('admin.accounts.soraTestMode')
-              : supportsGeminiImageTest
-                ? t('admin.accounts.geminiImageTestMode')
-                : t('admin.accounts.testPrompt')
+            supportsGeminiImageTest
+              ? t('admin.accounts.geminiImageTestMode')
+              : t('admin.accounts.testPrompt')
           }}
         </span>
       </div>
@@ -179,10 +171,10 @@
         </button>
         <button
           @click="startTest"
-          :disabled="status === 'connecting' || (!isSoraAccount && !selectedModelId)"
+          :disabled="status === 'connecting' || !selectedModelId"
           :class="[
             'flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all',
-            status === 'connecting' || (!isSoraAccount && !selectedModelId)
+            status === 'connecting' || !selectedModelId
               ? 'cursor-not-allowed bg-primary-400 text-white'
               : status === 'success'
                 ? 'bg-green-500 text-white hover:bg-green-600'
@@ -239,19 +231,13 @@ interface PreviewImage {
   mimeType?: string
 }
 
-const props = withDefaults(defineProps<{
+const props = defineProps<{
   show: boolean
   account: Account | null
-  presetModelId?: string | null
-  autoStart?: boolean
-}>(), {
-  presetModelId: null,
-  autoStart: false
-})
+}>()
 
 const emit = defineEmits<{
   (e: 'close'): void
-  (e: 'preset-missing'): void
 }>()
 
 const terminalRef = ref<HTMLElement | null>(null)
@@ -264,17 +250,14 @@ const selectedModelId = ref('')
 const testPrompt = ref('')
 const loadingModels = ref(false)
 let eventSource: EventSource | null = null
-const isSoraAccount = computed(() => props.account?.platform === 'sora')
 const generatedImages = ref<PreviewImage[]>([])
 const prioritizedGeminiModels = ['gemini-3.1-flash-image', 'gemini-2.5-flash-image', 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-3-flash-preview', 'gemini-3-pro-preview', 'gemini-2.0-flash']
 const supportsGeminiImageTest = computed(() => {
-  if (isSoraAccount.value) return false
   const modelID = selectedModelId.value.toLowerCase()
   if (!modelID.startsWith('gemini-') || !modelID.includes('-image')) return false
 
   return props.account?.platform === 'gemini' || (props.account?.platform === 'antigravity' && props.account?.type === 'apikey')
 })
-let autoStartArmed = false
 
 const sortTestModels = (models: ClaudeModel[]) => {
   const priorityMap = new Map(prioritizedGeminiModels.map((id, index) => [id, index]))
@@ -294,27 +277,8 @@ watch(
     if (newVal && props.account) {
       testPrompt.value = ''
       resetState()
-      autoStartArmed = Boolean(props.autoStart)
-      const presetMatched = await loadAvailableModels()
-      if (!autoStartArmed) return
-      if (isSoraAccount.value) {
-        autoStartArmed = false
-        startTest()
-        return
-      }
-      if (props.presetModelId && !presetMatched) {
-        autoStartArmed = false
-        emit('preset-missing')
-        return
-      }
-      if (selectedModelId.value) {
-        autoStartArmed = false
-        startTest()
-      } else {
-        autoStartArmed = false
-      }
+      await loadAvailableModels()
     } else {
-      autoStartArmed = false
       closeEventSource()
     }
   }
@@ -326,35 +290,18 @@ watch(selectedModelId, () => {
   }
 })
 
-const loadAvailableModels = async (): Promise<boolean> => {
-  if (!props.account) return false
-  if (props.account.platform === 'sora') {
-    availableModels.value = []
-    selectedModelId.value = ''
-    loadingModels.value = false
-    return true
-  }
+const loadAvailableModels = async () => {
+  if (!props.account) return
 
   loadingModels.value = true
   selectedModelId.value = '' // Reset selection before loading
-  let presetMatched = false
   try {
     const models = await adminAPI.accounts.getAvailableModels(props.account.id)
-    availableModels.value =
-      props.account.platform === 'gemini' || props.account.platform === 'antigravity'
-        ? sortTestModels(models)
-        : models
-
-    if (props.presetModelId) {
-      const preset = availableModels.value.find((m) => m.id === props.presetModelId)
-      if (preset) {
-        selectedModelId.value = preset.id
-        presetMatched = true
-      }
-    }
-
+    availableModels.value = props.account.platform === 'gemini' || props.account.platform === 'antigravity'
+      ? sortTestModels(models)
+      : models
     // Default selection by platform
-    if (!presetMatched && availableModels.value.length > 0) {
+    if (availableModels.value.length > 0) {
       if (props.account.platform === 'gemini') {
         selectedModelId.value = availableModels.value[0].id
       } else {
@@ -371,8 +318,6 @@ const loadAvailableModels = async (): Promise<boolean> => {
   } finally {
     loadingModels.value = false
   }
-
-  return presetMatched
 }
 
 const resetState = () => {
@@ -412,7 +357,7 @@ const scrollToBottom = async () => {
 }
 
 const startTest = async () => {
-  if (!props.account || (!isSoraAccount.value && !selectedModelId.value)) return
+  if (!props.account || !selectedModelId.value) return
 
   resetState()
   status.value = 'connecting'
@@ -433,14 +378,10 @@ const startTest = async () => {
         Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(
-        isSoraAccount.value
-          ? {}
-          : {
+      body: JSON.stringify({
               model_id: selectedModelId.value,
               prompt: supportsGeminiImageTest.value ? testPrompt.value.trim() : ''
-            }
-      )
+            })
     })
 
     if (!response.ok) {
@@ -500,9 +441,7 @@ const handleEvent = (event: {
         addLine(t('admin.accounts.usingModel', { model: event.model }), 'text-cyan-400')
       }
       addLine(
-        isSoraAccount.value
-          ? t('admin.accounts.soraTestingFlow')
-          : supportsGeminiImageTest.value
+        supportsGeminiImageTest.value
             ? t('admin.accounts.sendingGeminiImageRequest')
             : t('admin.accounts.sendingTestMessage'),
         'text-gray-400'

@@ -2,295 +2,130 @@
   <AppLayout>
     <TablePageLayout>
       <template #filters>
-        <div class="space-y-4">
-          <div class="grid grid-cols-2 gap-3 xl:grid-cols-5">
-            <div
-              v-for="card in accountStatusCards"
-              :key="card.key"
-              class="rounded-2xl border p-4 shadow-sm transition-colors"
-              :class="card.className"
-            >
-              <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0">
-                  <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                    {{ card.label }}
-                  </p>
-                  <p class="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
-                    {{ card.count.toLocaleString() }}
-                  </p>
-                </div>
-                <span class="rounded-full px-2 py-1 text-[11px] font-medium" :class="card.badgeClass">
-                  {{ t('admin.accounts.overview.global') }}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div class="card p-4">
-            <div class="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
-                  {{ t('admin.accounts.overview.groupsTitle') }}
-                </h3>
-                <p class="text-xs text-gray-500 dark:text-gray-400">
-                  {{ t('admin.accounts.overview.groupsHint') }}
-                </p>
-              </div>
-              <span class="text-xs text-gray-500 dark:text-gray-400">
-                {{ t('admin.accounts.groupCountTotal', { count: accountGroupCards.length }) }}
-              </span>
-            </div>
-
-            <div
-              v-if="accountGroupCards.length === 0"
-              class="rounded-xl border border-dashed border-gray-200 px-4 py-6 text-sm text-gray-500 dark:border-dark-700 dark:text-gray-400"
-            >
-              {{ t('admin.accounts.overview.noGroupStats') }}
-            </div>
-
-            <div v-else class="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-              <div
-                v-for="group in accountGroupCards"
-                :key="group.id"
-                class="rounded-xl border border-gray-200 bg-gray-50/70 p-3 dark:border-dark-700 dark:bg-dark-900/30"
-              >
-                <div class="flex items-start justify-between gap-2">
-                  <span class="truncate text-sm font-medium text-gray-900 dark:text-white" :title="group.name">
-                    {{ group.name }}
-                  </span>
-                  <span class="text-sm font-semibold text-gray-900 dark:text-white">
-                    {{ group.count.toLocaleString() }}
-                  </span>
-                </div>
-                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  {{ t(`admin.groups.platforms.${group.platform}`) }}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div class="card p-4">
-            <div class="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
-                  {{ t('admin.accounts.overview.spendTitle') }}
-                </h3>
-                <p class="text-xs text-gray-500 dark:text-gray-400">
-                  {{ t('admin.accounts.overview.spendHint') }}
-                </p>
-              </div>
-              <div class="flex items-center gap-2">
-                <span class="text-xs text-gray-500 dark:text-gray-400">
-                  {{ t('admin.accounts.overview.topCount', { count: accountSpendLeaderboard.length }) }}
-                </span>
+        <div class="flex flex-wrap-reverse items-start justify-between gap-3">
+          <AccountTableFilters
+            v-model:searchQuery="params.search"
+            :filters="params"
+            :groups="groups"
+            @update:filters="(newFilters) => Object.assign(params, newFilters)"
+            @change="debouncedReload"
+            @update:searchQuery="debouncedReload"
+          />
+          <AccountTableActions
+            :loading="loading"
+            @refresh="handleManualRefresh"
+            @sync="showSync = true"
+            @create="showCreate = true"
+          >
+            <template #after>
+              <!-- Auto Refresh Dropdown -->
+              <div class="relative" ref="autoRefreshDropdownRef">
                 <button
-                  type="button"
-                  class="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:text-gray-900 dark:border-gray-700 dark:bg-dark-700 dark:text-gray-300 dark:hover:text-white"
-                  @click="accountSpendCollapsed = !accountSpendCollapsed"
+                  @click="
+                    showAutoRefreshDropdown = !showAutoRefreshDropdown;
+                    showColumnDropdown = false
+                  "
+                  class="btn btn-secondary px-2 md:px-3"
+                  :title="t('admin.accounts.autoRefresh')"
                 >
-                  <svg
-                    v-if="accountSpendCollapsed"
-                    class="h-3 w-3"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
-                  </svg>
-                  <svg
-                    v-else
-                    class="h-3 w-3"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                  </svg>
-                  <span>
-                    {{ accountSpendCollapsed
-                      ? t('admin.accounts.overview.spendExpand')
-                      : t('admin.accounts.overview.spendCollapse') }}
+                  <Icon name="refresh" size="sm" :class="[autoRefreshEnabled ? 'animate-spin' : '']" />
+                  <span class="hidden md:inline">
+                    {{
+                      autoRefreshEnabled
+                        ? t('admin.accounts.autoRefreshCountdown', { seconds: autoRefreshCountdown })
+                        : t('admin.accounts.autoRefresh')
+                    }}
                   </span>
                 </button>
+                <div
+                  v-if="showAutoRefreshDropdown"
+                  class="absolute right-0 z-50 mt-2 w-56 origin-top-right rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800"
+                >
+                  <div class="p-2">
+                    <button
+                      @click="setAutoRefreshEnabled(!autoRefreshEnabled)"
+                      class="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+                    >
+                      <span>{{ t('admin.accounts.enableAutoRefresh') }}</span>
+                      <Icon v-if="autoRefreshEnabled" name="check" size="sm" class="text-primary-500" />
+                    </button>
+                    <div class="my-1 border-t border-gray-100 dark:border-gray-700"></div>
+                    <button
+                      v-for="sec in autoRefreshIntervals"
+                      :key="sec"
+                      @click="setAutoRefreshInterval(sec)"
+                      class="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+                    >
+                      <span>{{ autoRefreshIntervalLabel(sec) }}</span>
+                      <Icon v-if="autoRefreshIntervalSeconds === sec" name="check" size="sm" class="text-primary-500" />
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
 
-            <div
-              v-if="accountSpendLoading && accountSpendLeaderboard.length === 0"
-              class="rounded-xl border border-dashed border-gray-200 px-4 py-6 text-sm text-gray-500 dark:border-dark-700 dark:text-gray-400"
-            >
-              {{ t('admin.accounts.overview.loadingSpend') }}
-            </div>
-
-            <div
-              v-else-if="accountSpendError"
-              class="rounded-xl border border-dashed border-rose-200 px-4 py-6 text-sm text-rose-600 dark:border-rose-900/40 dark:text-rose-300"
-            >
-              {{ t('admin.accounts.overview.spendLoadFailed') }}
-            </div>
-
-            <div
-              v-else-if="!hasAccountSpendData"
-              class="rounded-xl border border-dashed border-gray-200 px-4 py-6 text-sm text-gray-500 dark:border-dark-700 dark:text-gray-400"
-            >
-              {{ t('admin.accounts.overview.noSpendData') }}
-            </div>
-
-            <div
-              v-else-if="accountSpendCollapsed"
-              class="rounded-xl border border-dashed border-gray-200 px-4 py-6 text-sm text-gray-500 dark:border-dark-700 dark:text-gray-400"
-            >
-              {{ t('admin.accounts.overview.spendCollapsed') }}
-            </div>
-
-            <div v-else class="space-y-2">
-              <div
-                v-for="(entry, index) in accountSpendLeaderboard"
-                :key="entry.id"
-                class="flex items-center justify-between gap-4 rounded-xl border border-gray-200 bg-gray-50/70 px-4 py-3 dark:border-dark-700 dark:bg-dark-900/30"
+              <!-- Error Passthrough Rules -->
+              <button
+                @click="showErrorPassthrough = true"
+                class="btn btn-secondary"
+                :title="t('admin.errorPassthrough.title')"
               >
-                <div class="flex min-w-0 items-center gap-3">
-                  <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xs font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
-                    #{{ index + 1 }}
-                  </span>
-                  <div class="min-w-0">
-                    <div class="truncate text-sm font-medium text-gray-900 dark:text-white" :title="entry.name">
-                      {{ entry.name }}
-                    </div>
-                    <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {{ t(`admin.accounts.platforms.${entry.platform}`) }} ·
-                      {{ t('admin.accounts.overview.requestsCount', { count: entry.requests }) }}
-                    </div>
-                  </div>
-                </div>
+                <Icon name="shield" size="md" class="mr-1.5" />
+                <span class="hidden md:inline">{{ t('admin.errorPassthrough.title') }}</span>
+              </button>
 
-                <div class="text-right">
-                  <div class="text-sm font-semibold text-gray-900 dark:text-white">
-                    {{ formatCurrency(entry.cost) }}
-                  </div>
-                  <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    {{ t('admin.accounts.overview.todaySpend') }}
+              <!-- TLS Fingerprint Profiles -->
+              <button
+                @click="showTLSFingerprintProfiles = true"
+                class="btn btn-secondary"
+                :title="t('admin.tlsFingerprintProfiles.title')"
+              >
+                <Icon name="lock" size="md" class="mr-1.5" />
+                <span class="hidden md:inline">{{ t('admin.tlsFingerprintProfiles.title') }}</span>
+              </button>
+
+              <!-- Column Settings Dropdown -->
+              <div class="relative" ref="columnDropdownRef">
+                <button
+                  @click="
+                    showColumnDropdown = !showColumnDropdown;
+                    showAutoRefreshDropdown = false
+                  "
+                  class="btn btn-secondary px-2 md:px-3"
+                  :title="t('admin.users.columnSettings')"
+                >
+                  <svg class="h-4 w-4 md:mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 4.5v15m6-15v15m-10.875 0h15.75c.621 0 1.125-.504 1.125-1.125V5.625c0-.621-.504-1.125-1.125-1.125H4.125C3.504 4.5 3 5.004 3 5.625v12.75c0 .621.504 1.125 1.125 1.125z" />
+                  </svg>
+                  <span class="hidden md:inline">{{ t('admin.users.columnSettings') }}</span>
+                </button>
+                <!-- Dropdown menu -->
+                <div
+                  v-if="showColumnDropdown"
+                  class="absolute right-0 z-50 mt-2 w-48 origin-top-right rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800"
+                >
+                  <div class="max-h-80 overflow-y-auto p-2">
+                    <button
+                      v-for="col in toggleableColumns"
+                      :key="col.key"
+                      @click="toggleColumn(col.key)"
+                      class="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+                    >
+                      <span>{{ col.label }}</span>
+                      <Icon v-if="isColumnVisible(col.key)" name="check" size="sm" class="text-primary-500" />
+                    </button>
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-
-          <div class="flex flex-wrap-reverse items-start justify-between gap-3">
-            <AccountTableFilters
-              v-model:searchQuery="params.search"
-              :filters="params"
-              :groups="groups"
-              @update:filters="(newFilters) => Object.assign(params, newFilters)"
-              @change="debouncedReload"
-              @update:searchQuery="debouncedReload"
-            />
-            <AccountTableActions
-              :loading="loading"
-              @refresh="handleManualRefresh"
-              @sync="showSync = true"
-              @create="showCreate = true"
-            >
-              <template #after>
-                <!-- Auto Refresh Dropdown -->
-                <div class="relative" ref="autoRefreshDropdownRef">
-                  <button
-                    @click="
-                      showAutoRefreshDropdown = !showAutoRefreshDropdown;
-                      showColumnDropdown = false
-                    "
-                    class="btn btn-secondary px-2 md:px-3"
-                    :title="t('admin.accounts.autoRefresh')"
-                  >
-                    <Icon name="refresh" size="sm" :class="[autoRefreshEnabled ? 'animate-spin' : '']" />
-                    <span class="hidden md:inline">
-                      {{
-                        autoRefreshEnabled
-                          ? t('admin.accounts.autoRefreshCountdown', { seconds: autoRefreshCountdown })
-                          : t('admin.accounts.autoRefresh')
-                      }}
-                    </span>
-                  </button>
-                  <div
-                    v-if="showAutoRefreshDropdown"
-                    class="absolute right-0 z-50 mt-2 w-56 origin-top-right rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800"
-                  >
-                    <div class="p-2">
-                      <button
-                        @click="setAutoRefreshEnabled(!autoRefreshEnabled)"
-                        class="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
-                      >
-                        <span>{{ t('admin.accounts.enableAutoRefresh') }}</span>
-                        <Icon v-if="autoRefreshEnabled" name="check" size="sm" class="text-primary-500" />
-                      </button>
-                      <div class="my-1 border-t border-gray-100 dark:border-gray-700"></div>
-                      <button
-                        v-for="sec in autoRefreshIntervals"
-                        :key="sec"
-                        @click="setAutoRefreshInterval(sec)"
-                        class="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
-                      >
-                        <span>{{ autoRefreshIntervalLabel(sec) }}</span>
-                        <Icon v-if="autoRefreshIntervalSeconds === sec" name="check" size="sm" class="text-primary-500" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Error Passthrough Rules -->
-                <button
-                  @click="showErrorPassthrough = true"
-                  class="btn btn-secondary"
-                  :title="t('admin.errorPassthrough.title')"
-                >
-                  <Icon name="shield" size="md" class="mr-1.5" />
-                  <span class="hidden md:inline">{{ t('admin.errorPassthrough.title') }}</span>
-                </button>
-
-                <!-- Column Settings Dropdown -->
-                <div class="relative" ref="columnDropdownRef">
-                  <button
-                    @click="
-                      showColumnDropdown = !showColumnDropdown;
-                      showAutoRefreshDropdown = false
-                    "
-                    class="btn btn-secondary px-2 md:px-3"
-                    :title="t('admin.users.columnSettings')"
-                  >
-                    <svg class="h-4 w-4 md:mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M9 4.5v15m6-15v15m-10.875 0h15.75c.621 0 1.125-.504 1.125-1.125V5.625c0-.621-.504-1.125-1.125-1.125H4.125C3.504 4.5 3 5.004 3 5.625v12.75c0 .621.504 1.125 1.125 1.125z" />
-                    </svg>
-                    <span class="hidden md:inline">{{ t('admin.users.columnSettings') }}</span>
-                  </button>
-                  <!-- Dropdown menu -->
-                  <div
-                    v-if="showColumnDropdown"
-                    class="absolute right-0 z-50 mt-2 w-48 origin-top-right rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800"
-                  >
-                    <div class="max-h-80 overflow-y-auto p-2">
-                      <button
-                        v-for="col in toggleableColumns"
-                        :key="col.key"
-                        @click="toggleColumn(col.key)"
-                        class="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
-                      >
-                        <span>{{ col.label }}</span>
-                        <Icon v-if="isColumnVisible(col.key)" name="check" size="sm" class="text-primary-500" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </template>
-              <template #beforeCreate>
-                <button @click="showImportData = true" class="btn btn-secondary">
-                  {{ t('admin.accounts.dataImport') }}
-                </button>
-                <button @click="openExportDataDialog" class="btn btn-secondary">
-                  {{ selIds.length ? t('admin.accounts.dataExportSelected') : t('admin.accounts.dataExport') }}
-                </button>
-              </template>
-            </AccountTableActions>
-          </div>
+            </template>
+            <template #beforeCreate>
+              <button @click="showImportData = true" class="btn btn-secondary">
+                {{ t('admin.accounts.dataImport') }}
+              </button>
+              <button @click="openExportDataDialog" class="btn btn-secondary">
+                {{ selIds.length ? t('admin.accounts.dataExportSelected') : t('admin.accounts.dataExport') }}
+              </button>
+            </template>
+          </AccountTableActions>
         </div>
         <div
           v-if="hasPendingListSync"
@@ -306,13 +141,15 @@
         </div>
       </template>
       <template #table>
-        <AccountBulkActionsBar :selected-ids="selIds" :batch-testing="batchTesting" @delete="handleBulkDelete" @reset-status="handleBulkResetStatus" @refresh-token="handleBulkRefreshToken" @batch-test="handleBulkTest" @edit="showBulkEdit = true" @clear="clearSelection" @select-page="selectPage" @toggle-schedulable="handleBulkToggleSchedulable" />
+        <AccountBulkActionsBar :selected-ids="selIds" @delete="handleBulkDelete" @reset-status="handleBulkResetStatus" @refresh-token="handleBulkRefreshToken" @edit="showBulkEdit = true" @clear="clearSelection" @select-page="selectPage" @toggle-schedulable="handleBulkToggleSchedulable" />
         <div ref="accountTableRef" class="flex min-h-0 flex-1 flex-col overflow-hidden">
         <DataTable
           :columns="cols"
           :data="accounts"
           :loading="loading"
           row-key="id"
+          :server-side-sort="true"
+          @sort="handleSort"
           default-sort-key="name"
           default-sort-order="asc"
           :sort-storage-key="ACCOUNT_SORT_STORAGE_KEY"
@@ -347,7 +184,7 @@
           </template>
           <template #cell-platform_type="{ row }">
             <div class="flex flex-wrap items-center gap-1">
-              <PlatformTypeBadge :platform="row.platform" :type="row.type" :plan-type="row.credentials?.plan_type" :privacy-mode="row.extra?.privacy_mode" />
+              <PlatformTypeBadge :platform="row.platform" :type="row.type" :plan-type="row.credentials?.plan_type" :privacy-mode="row.extra?.privacy_mode" :subscription-expires-at="row.credentials?.subscription_expires_at" />
               <span
                 v-if="getAntigravityTierLabel(row)"
                 :class="['inline-block rounded px-1.5 py-0.5 text-[10px] font-medium', getAntigravityTierClass(row)]"
@@ -425,19 +262,7 @@
             </div>
           </template>
           <template #cell-actions="{ row }">
-            <div class="flex flex-wrap items-center gap-1">
-              <button
-                @click="handleQuickTestClick(row)"
-                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-emerald-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700 dark:text-emerald-300 dark:hover:bg-emerald-900/30"
-                :title="quickTestPreference
-                  ? t('admin.accounts.quickTestTooltip', { model: quickTestPreference.label })
-                  : t('admin.accounts.quickTestTooltipUnset')"
-              >
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.972l11.54 6.347a1.125 1.125 0 010 1.944l-11.54 6.347a1.125 1.125 0 01-1.667-.972z" />
-                </svg>
-                <span class="text-xs">{{ t('admin.accounts.quickTest') }}</span>
-              </button>
+            <div class="flex items-center gap-1">
               <button @click="handleEdit(row)" class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400">
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg>
                 <span class="text-xs">{{ t('common.edit') }}</span>
@@ -460,17 +285,10 @@
     <CreateAccountModal :show="showCreate" :proxies="proxies" :groups="groups" @close="showCreate = false" @created="reload" />
     <EditAccountModal :show="showEdit" :account="edAcc" :proxies="proxies" :groups="groups" @close="showEdit = false" @updated="handleAccountUpdated" />
     <ReAuthAccountModal :show="showReAuth" :account="reAuthAcc" @close="closeReAuthModal" @reauthorized="handleAccountUpdated" />
-    <AccountTestModal
-      :show="showTest"
-      :account="testingAcc"
-      :preset-model-id="quickTestAutoStart ? quickTestPresetModelId : null"
-      :auto-start="quickTestAutoStart"
-      @close="closeTestModal"
-      @preset-missing="handleQuickPresetMissing"
-    />
+    <AccountTestModal :show="showTest" :account="testingAcc" @close="closeTestModal" />
     <AccountStatsModal :show="showStats" :account="statsAcc" @close="closeStatsModal" />
     <ScheduledTestsPanel :show="showSchedulePanel" :account-id="scheduleAcc?.id ?? null" :model-options="scheduleModelOptions" @close="closeSchedulePanel" />
-    <AccountActionMenu :show="menu.show" :account="menu.acc" :position="menu.pos" @close="menu.show = false" @test="handleTest" @quick-test-settings="handleQuickTestSettings" @stats="handleViewStats" @schedule="handleSchedule" @reauth="handleReAuth" @refresh-token="handleRefresh" @recover-state="handleRecoverState" @reset-quota="handleResetQuota" />
+    <AccountActionMenu :show="menu.show" :account="menu.acc" :position="menu.pos" @close="menu.show = false" @test="handleTest" @stats="handleViewStats" @schedule="handleSchedule" @reauth="handleReAuth" @refresh-token="handleRefresh" @recover-state="handleRecoverState" @reset-quota="handleResetQuota" @set-privacy="handleSetPrivacy" />
     <SyncFromCrsModal :show="showSync" @close="showSync = false" @synced="reload" />
     <ImportDataModal :show="showImportData" @close="showImportData = false" @imported="handleDataImported" />
     <BulkEditAccountModal :show="showBulkEdit" :account-ids="selIds" :selected-platforms="selPlatforms" :selected-types="selTypes" :proxies="proxies" :groups="groups" @close="showBulkEdit = false" @updated="handleBulkUpdated" />
@@ -483,60 +301,7 @@
       </label>
     </ConfirmDialog>
     <ErrorPassthroughRulesModal :show="showErrorPassthrough" @close="showErrorPassthrough = false" />
-    <BaseDialog
-      :show="quickTestSetup.show"
-      :title="t('admin.accounts.quickTestSetupTitle')"
-      width="narrow"
-      @close="closeQuickTestSetup"
-    >
-      <div class="space-y-4">
-        <p class="text-sm text-gray-600 dark:text-gray-300">
-          {{
-            quickTestPreference
-              ? t('admin.accounts.quickTestSetupDescriptionSet', { model: quickTestPreference.label })
-              : t('admin.accounts.quickTestSetupDescription')
-          }}
-        </p>
-        <div
-          v-if="quickTestSetup.loading"
-          class="rounded-lg border border-dashed border-gray-200 px-3 py-6 text-sm text-gray-500 dark:border-dark-600 dark:text-gray-300"
-        >
-          {{ t('admin.accounts.quickTestSetupLoading') }}
-        </div>
-        <div
-          v-else-if="quickTestSetup.options.length === 0"
-          class="rounded-lg border border-dashed border-gray-200 px-3 py-6 text-sm text-gray-500 dark:border-dark-600 dark:text-gray-300"
-        >
-          {{ t('admin.accounts.quickTestSetupEmpty') }}
-        </div>
-        <div v-else class="space-y-2">
-          <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
-            {{ t('admin.accounts.quickTestSetupLabel') }}
-          </label>
-          <Select
-            v-model="quickTestSetup.selected"
-            :options="quickTestSetup.options"
-            :disabled="quickTestSetup.loading"
-            :placeholder="t('admin.accounts.quickTestSetupPlaceholder')"
-          />
-        </div>
-      </div>
-      <template #footer>
-        <button
-          class="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 dark:bg-dark-600 dark:text-gray-300 dark:hover:bg-dark-500"
-          @click="closeQuickTestSetup"
-        >
-          {{ t('common.cancel') }}
-        </button>
-        <button
-          class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
-          :disabled="quickTestSetup.loading || !quickTestSetup.selected"
-          @click="confirmQuickTestSetup"
-        >
-          {{ t('admin.accounts.quickTestSetupSave') }}
-        </button>
-      </template>
-    </BaseDialog>
+    <TLSFingerprintProfilesModal :show="showTLSFingerprintProfiles" @close="showTLSFingerprintProfiles = false" />
   </AppLayout>
 </template>
 
@@ -555,7 +320,6 @@ import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 import DataTable from '@/components/common/DataTable.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
-import BaseDialog from '@/components/common/BaseDialog.vue'
 import { CreateAccountModal, EditAccountModal, BulkEditAccountModal, SyncFromCrsModal, TempUnschedStatusModal } from '@/components/account'
 import AccountTableActions from '@/components/admin/account/AccountTableActions.vue'
 import AccountTableFilters from '@/components/admin/account/AccountTableFilters.vue'
@@ -566,7 +330,7 @@ import ReAuthAccountModal from '@/components/admin/account/ReAuthAccountModal.vu
 import AccountTestModal from '@/components/admin/account/AccountTestModal.vue'
 import AccountStatsModal from '@/components/admin/account/AccountStatsModal.vue'
 import ScheduledTestsPanel from '@/components/admin/account/ScheduledTestsPanel.vue'
-import Select, { type SelectOption } from '@/components/common/Select.vue'
+import type { SelectOption } from '@/components/common/Select.vue'
 import AccountStatusIndicator from '@/components/account/AccountStatusIndicator.vue'
 import AccountUsageCell from '@/components/account/AccountUsageCell.vue'
 import AccountTodayStatsCell from '@/components/account/AccountTodayStatsCell.vue'
@@ -575,9 +339,10 @@ import AccountCapacityCell from '@/components/account/AccountCapacityCell.vue'
 import PlatformTypeBadge from '@/components/common/PlatformTypeBadge.vue'
 import Icon from '@/components/icons/Icon.vue'
 import ErrorPassthroughRulesModal from '@/components/admin/ErrorPassthroughRulesModal.vue'
+import TLSFingerprintProfilesModal from '@/components/admin/TLSFingerprintProfilesModal.vue'
 import { buildOpenAIUsageRefreshKey } from '@/utils/accountUsageRefresh'
-import { formatCurrency, formatDateTime, formatRelativeTime } from '@/utils/format'
-import type { Account, AccountPlatform, AccountType, Proxy as AccountProxy, AdminGroup, WindowStats, ClaudeModel, DashboardStats } from '@/types'
+import { formatDateTime, formatRelativeTime } from '@/utils/format'
+import type { Account, AccountPlatform, AccountType, Proxy as AccountProxy, AdminGroup, WindowStats, ClaudeModel } from '@/types'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -585,7 +350,6 @@ const authStore = useAuthStore()
 
 const proxies = ref<AccountProxy[]>([])
 const groups = ref<AdminGroup[]>([])
-const accountOverview = ref<DashboardStats | null>(null)
 const accountTableRef = ref<HTMLElement | null>(null)
 const selPlatforms = computed<AccountPlatform[]>(() => {
   const platforms = new Set(
@@ -616,6 +380,7 @@ const showReAuth = ref(false)
 const showTest = ref(false)
 const showStats = ref(false)
 const showErrorPassthrough = ref(false)
+const showTLSFingerprintProfiles = ref(false)
 const edAcc = ref<Account | null>(null)
 const tempUnschedAcc = ref<Account | null>(null)
 const deletingAcc = ref<Account | null>(null)
@@ -625,70 +390,9 @@ const statsAcc = ref<Account | null>(null)
 const showSchedulePanel = ref(false)
 const scheduleAcc = ref<Account | null>(null)
 const scheduleModelOptions = ref<SelectOption[]>([])
-const accountSpendCollapsed = ref(false)
-const batchTesting = ref(false)
 const togglingSchedulable = ref<number | null>(null)
 const menu = reactive<{show:boolean, acc:Account|null, pos:{top:number, left:number}|null}>({ show: false, acc: null, pos: null })
 const exportingData = ref(false)
-
-const loadQuickTestPreference = () => {
-  if (typeof window === 'undefined') return
-  try {
-    const raw = localStorage.getItem(QUICK_TEST_MODEL_KEY)
-    if (!raw) return
-    const parsed = JSON.parse(raw) as QuickTestPreference
-    if (parsed?.id) {
-      quickTestPreference.value = parsed
-    }
-  } catch (error) {
-    console.error('Failed to load quick test preference:', error)
-  }
-}
-
-const persistQuickTestPreference = (pref: QuickTestPreference | null) => {
-  if (typeof window === 'undefined') return
-  try {
-    if (pref) {
-      localStorage.setItem(QUICK_TEST_MODEL_KEY, JSON.stringify(pref))
-    } else {
-      localStorage.removeItem(QUICK_TEST_MODEL_KEY)
-    }
-  } catch (error) {
-    console.error('Failed to persist quick test preference:', error)
-  }
-}
-
-const clearQuickTestPreference = () => {
-  quickTestPreference.value = null
-  persistQuickTestPreference(null)
-}
-
-interface QuickTestPreference {
-  id: string
-  label: string
-}
-
-type QuickTestIntent = 'run' | 'config'
-
-const QUICK_TEST_MODEL_KEY = 'accounts-quick-test-model'
-const quickTestPreference = ref<QuickTestPreference | null>(null)
-const quickTestPresetModelId = ref<string | null>(null)
-const quickTestAutoStart = ref(false)
-const quickTestSetup = reactive<{
-  show: boolean
-  account: Account | null
-  options: SelectOption[]
-  selected: string | number | boolean | null
-  loading: boolean
-  intent: QuickTestIntent
-}>({
-  show: false,
-  account: null,
-  options: [],
-  selected: '',
-  loading: false,
-  intent: 'run'
-})
 
 // Column settings
 const showColumnDropdown = ref(false)
@@ -699,6 +403,37 @@ const HIDDEN_COLUMNS_KEY = 'account-hidden-columns'
 
 // Sorting settings
 const ACCOUNT_SORT_STORAGE_KEY = 'account-table-sort'
+type AccountSortOrder = 'asc' | 'desc'
+type AccountSortState = {
+  sort_by: string
+  sort_order: AccountSortOrder
+}
+const ACCOUNT_SORTABLE_KEYS = new Set([
+  'name',
+  'status',
+  'schedulable',
+  'priority',
+  'rate_multiplier',
+  'last_used_at',
+  'expires_at'
+])
+const loadInitialAccountSortState = (): AccountSortState => {
+  const fallback: AccountSortState = { sort_by: 'name', sort_order: 'asc' }
+  try {
+    const raw = localStorage.getItem(ACCOUNT_SORT_STORAGE_KEY)
+    if (!raw) return fallback
+    const parsed = JSON.parse(raw) as { key?: string; order?: string }
+    const key = typeof parsed.key === 'string' ? parsed.key : ''
+    if (!ACCOUNT_SORTABLE_KEYS.has(key)) return fallback
+    return {
+      sort_by: key,
+      sort_order: parsed.order === 'desc' ? 'desc' : 'asc'
+    }
+  } catch {
+    return fallback
+  }
+}
+const sortState = reactive<AccountSortState>(loadInitialAccountSortState())
 
 // Auto refresh settings
 const showAutoRefreshDropdown = ref(false)
@@ -718,99 +453,7 @@ const todayStatsLoading = ref(false)
 const todayStatsError = ref<string | null>(null)
 const todayStatsReqSeq = ref(0)
 const pendingTodayStatsRefresh = ref(false)
-const accountSpendLeaderboard = ref<Array<{
-  id: number
-  name: string
-  platform: string
-  cost: number
-  requests: number
-}>>([])
-const accountSpendLoading = ref(false)
-const accountSpendError = ref<string | null>(null)
-const accountSpendReqSeq = ref(0)
-const accountSpendLeaderboardLimit = 5
 const usageManualRefreshToken = ref(0)
-
-const accountStatusCards = computed(() => {
-  const stats = accountOverview.value
-  return [
-    {
-      key: 'total',
-      label: t('admin.accounts.overview.total'),
-      count: stats?.total_accounts ?? 0,
-      className: 'border-slate-200 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-900/20',
-      badgeClass: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
-    },
-    {
-      key: 'normal',
-      label: t('admin.accounts.overview.normal'),
-      count: stats?.normal_accounts ?? 0,
-      className: 'border-emerald-200 bg-emerald-50/70 dark:border-emerald-900/40 dark:bg-emerald-900/10',
-      badgeClass: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-    },
-    {
-      key: 'error',
-      label: t('admin.accounts.overview.error'),
-      count: stats?.error_accounts ?? 0,
-      className: 'border-rose-200 bg-rose-50/70 dark:border-rose-900/40 dark:bg-rose-900/10',
-      badgeClass: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'
-    },
-    {
-      key: 'rateLimited',
-      label: t('admin.accounts.overview.rateLimited'),
-      count: stats?.ratelimit_accounts ?? 0,
-      className: 'border-amber-200 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-900/10',
-      badgeClass: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
-    },
-    {
-      key: 'overloaded',
-      label: t('admin.accounts.overview.overloaded'),
-      count: stats?.overload_accounts ?? 0,
-      className: 'border-purple-200 bg-purple-50/70 dark:border-purple-900/40 dark:bg-purple-900/10',
-      badgeClass: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'
-    }
-  ]
-})
-
-const accountGroupCards = computed(() =>
-  [...groups.value]
-    .sort((a, b) => {
-      const countDiff = (b.account_count ?? 0) - (a.account_count ?? 0)
-      if (countDiff !== 0) return countDiff
-      return a.name.localeCompare(b.name)
-    })
-    .map((group) => ({
-      id: group.id,
-      name: group.name,
-      count: group.account_count ?? 0,
-      platform: group.platform
-    }))
-)
-
-const refreshAccountSpendLeaderboard = async () => {
-  const reqSeq = ++accountSpendReqSeq.value
-  accountSpendLoading.value = true
-  accountSpendError.value = null
-
-  try {
-    const result = await adminAPI.accounts.getTodaySpendLeaderboard(accountSpendLeaderboardLimit)
-    if (reqSeq !== accountSpendReqSeq.value) return
-    accountSpendLeaderboard.value = Array.isArray(result.items) ? result.items : []
-  } catch (error) {
-    if (reqSeq !== accountSpendReqSeq.value) return
-    accountSpendError.value = 'Failed'
-    accountSpendLeaderboard.value = []
-    console.error('Failed to load account spend leaderboard:', error)
-  } finally {
-    if (reqSeq === accountSpendReqSeq.value) {
-      accountSpendLoading.value = false
-    }
-  }
-}
-
-const hasAccountSpendData = computed(() =>
-  accountSpendLeaderboard.value.some((entry) => entry.cost > 0 || entry.requests > 0)
-)
 
 const buildDefaultTodayStats = (): WindowStats => ({
   requests: 0,
@@ -933,7 +576,6 @@ const saveAutoRefreshToStorage = () => {
 if (typeof window !== 'undefined') {
   loadSavedColumns()
   loadSavedAutoRefresh()
-  loadQuickTestPreference()
 }
 
 const setAutoRefreshEnabled = (enabled: boolean) => {
@@ -985,7 +627,16 @@ const {
   handlePageSizeChange: baseHandlePageSizeChange
 } = useTableLoader<Account, any>({
   fetchFn: adminAPI.accounts.list,
-  initialParams: { platform: '', type: '', status: '', schedulable: '', group: '', search: '' }
+  initialParams: {
+    platform: '',
+    type: '',
+    status: '',
+    privacy_mode: '',
+    group: '',
+    search: '',
+    sort_by: sortState.sort_by,
+    sort_order: sortState.sort_order
+  }
 })
 
 const {
@@ -1017,19 +668,6 @@ const resetAutoRefreshCache = () => {
 
 const isFirstLoad = ref(true)
 
-const refreshOverviewData = async () => {
-  try {
-    const [stats, nextGroups] = await Promise.all([
-      adminAPI.dashboard.getStats(),
-      adminAPI.groups.getAll()
-    ])
-    accountOverview.value = stats
-    groups.value = nextGroups
-  } catch (error) {
-    console.error('Failed to load account overview:', error)
-  }
-}
-
 const load = async () => {
   const requestParams = params as any
   hasPendingListSync.value = false
@@ -1043,11 +681,7 @@ const load = async () => {
     isFirstLoad.value = false
     delete requestParams.lite
   }
-  await Promise.all([
-    refreshTodayStatsBatch(),
-    refreshOverviewData(),
-    refreshAccountSpendLeaderboard()
-  ])
+  await refreshTodayStatsBatch()
 }
 
 const reload = async () => {
@@ -1055,11 +689,7 @@ const reload = async () => {
   resetAutoRefreshCache()
   pendingTodayStatsRefresh.value = false
   await baseReload()
-  await Promise.all([
-    refreshTodayStatsBatch(),
-    refreshOverviewData(),
-    refreshAccountSpendLeaderboard()
-  ])
+  await refreshTodayStatsBatch()
 }
 
 const debouncedReload = () => {
@@ -1081,6 +711,19 @@ const handlePageSizeChange = (size: number) => {
   resetAutoRefreshCache()
   pendingTodayStatsRefresh.value = true
   baseHandlePageSizeChange(size)
+}
+
+const handleSort = (key: string, order: AccountSortOrder) => {
+  sortState.sort_by = key
+  sortState.sort_order = order
+  const requestParams = params as any
+  requestParams.sort_by = key
+  requestParams.sort_order = order
+  pagination.page = 1
+  hasPendingListSync.value = false
+  resetAutoRefreshCache()
+  pendingTodayStatsRefresh.value = true
+  load()
 }
 
 watch(loading, (isLoading, wasLoading) => {
@@ -1183,9 +826,11 @@ const refreshAccountsIncrementally = async () => {
         platform?: string
         type?: string
         status?: string
-        schedulable?: string
+        privacy_mode?: string
         group?: string
         search?: string
+        sort_by?: string
+        sort_order?: AccountSortOrder
 
       },
       { etag: autoRefreshETag.value }
@@ -1201,10 +846,7 @@ const refreshAccountsIncrementally = async () => {
       hasPendingListSync.value = false
     }
 
-    await Promise.all([
-      refreshTodayStatsBatch(),
-      refreshAccountSpendLeaderboard()
-    ])
+    await refreshTodayStatsBatch()
   } catch (error) {
     console.error('Auto refresh failed:', error)
   } finally {
@@ -1414,42 +1056,6 @@ const handleBulkRefreshToken = async () => {
     appStore.showError(String(error))
   }
 }
-const handleBulkTest = async () => {
-  const selectedIds = [...selIds.value]
-  if (selectedIds.length === 0) return
-  if (batchTesting.value) return
-  if (!confirm(t('admin.accounts.bulkActions.batchTestConfirm', { count: selectedIds.length }))) return
-
-  try {
-    batchTesting.value = true
-    const result = await adminAPI.accounts.batchTest(
-      selectedIds,
-      quickTestPreference.value?.id
-    )
-    if (result.failed > 0) {
-      appStore.showError(t('admin.accounts.bulkActions.batchTestPartial', {
-        success: result.success,
-        failed: result.failed
-      }))
-      if (result.errors && result.errors.length > 0) {
-        const firstError = result.errors[0]
-        appStore.showError(`#${firstError.account_id}: ${firstError.error}`)
-      }
-      return
-    }
-
-    appStore.showSuccess(t('admin.accounts.bulkActions.batchTestSuccess', {
-      count: result.success
-    }))
-    clearSelection()
-  } catch (error: any) {
-    console.error('Failed to batch test accounts:', error)
-    appStore.showError(error?.response?.data?.detail || t('admin.accounts.bulkActions.batchTestFailed'))
-  } finally {
-    batchTesting.value = false
-    enterAutoRefreshSilentWindow()
-  }
-}
 const updateSchedulableInList = (accountIds: number[], schedulable: boolean) => {
   if (accountIds.length === 0) return
   const idSet = new Set(accountIds)
@@ -1554,21 +1160,58 @@ const handleBulkToggleSchedulable = async (schedulable: boolean) => {
 }
 const handleBulkUpdated = () => { showBulkEdit.value = false; clearSelection(); reload() }
 const handleDataImported = () => { showImportData.value = false; reload() }
+const ACCOUNT_UNGROUPED_GROUP_QUERY_VALUE = 'ungrouped'
+const ACCOUNT_PRIVACY_MODE_UNSET_QUERY_VALUE = '__unset__'
+const buildAccountQueryFilters = () => ({
+  platform: params.platform || '',
+  type: params.type || '',
+  status: params.status || '',
+  group: params.group || '',
+  privacy_mode: params.privacy_mode || '',
+  search: params.search || '',
+  sort_by: sortState.sort_by,
+  sort_order: sortState.sort_order
+})
 const accountMatchesCurrentFilters = (account: Account) => {
-  if (params.platform && account.platform !== params.platform) return false
-  if (params.type && account.type !== params.type) return false
-  if (params.status) {
-    if (params.status === 'rate_limited') {
-      if (!account.rate_limit_reset_at) return false
-      const resetAt = new Date(account.rate_limit_reset_at).getTime()
-      if (!Number.isFinite(resetAt) || resetAt <= Date.now()) return false
-    } else if (account.status !== params.status) {
+  const filters = buildAccountQueryFilters()
+  if (filters.platform && account.platform !== filters.platform) return false
+  if (filters.type && account.type !== filters.type) return false
+  if (filters.status) {
+    const now = Date.now()
+    const rateLimitResetAt = account.rate_limit_reset_at ? new Date(account.rate_limit_reset_at).getTime() : Number.NaN
+    const isRateLimited = Number.isFinite(rateLimitResetAt) && rateLimitResetAt > now
+    const tempUnschedUntil = account.temp_unschedulable_until ? new Date(account.temp_unschedulable_until).getTime() : Number.NaN
+    const isTempUnschedulable = Number.isFinite(tempUnschedUntil) && tempUnschedUntil > now
+
+    if (filters.status === 'active') {
+      if (account.status !== 'active' || isRateLimited || isTempUnschedulable || !account.schedulable) return false
+    } else if (filters.status === 'rate_limited') {
+      if (account.status !== 'active' || !isRateLimited || isTempUnschedulable) return false
+    } else if (filters.status === 'temp_unschedulable') {
+      if (account.status !== 'active' || !isTempUnschedulable) return false
+    } else if (filters.status === 'unschedulable') {
+      if (account.status !== 'active' || account.schedulable || isRateLimited || isTempUnschedulable) return false
+    } else if (account.status !== filters.status) {
       return false
     }
   }
-  if (params.schedulable === 'true' && !account.schedulable) return false
-  if (params.schedulable === 'false' && account.schedulable) return false
-  const search = String(params.search || '').trim().toLowerCase()
+  if (filters.group) {
+    const groupIds = account.group_ids ?? account.groups?.map((group) => group.id) ?? []
+    if (filters.group === ACCOUNT_UNGROUPED_GROUP_QUERY_VALUE) {
+      if (groupIds.length > 0) return false
+    } else if (!groupIds.includes(Number(filters.group))) {
+      return false
+    }
+  }
+  const privacyMode = typeof account.extra?.privacy_mode === 'string' ? account.extra.privacy_mode : ''
+  if (filters.privacy_mode) {
+    if (filters.privacy_mode === ACCOUNT_PRIVACY_MODE_UNSET_QUERY_VALUE) {
+      if (privacyMode.trim() !== '') return false
+    } else if (privacyMode !== filters.privacy_mode) {
+      return false
+    }
+  }
+  const search = String(filters.search || '').trim().toLowerCase()
   if (search && !account.name.toLowerCase().includes(search)) return false
   return true
 }
@@ -1634,13 +1277,7 @@ const handleExportData = async () => {
         ? { ids: selIds.value, includeProxies: includeProxyOnExport.value }
         : {
             includeProxies: includeProxyOnExport.value,
-            filters: {
-              platform: params.platform,
-              type: params.type,
-              status: params.status,
-              schedulable: params.schedulable,
-              search: params.search
-            }
+            filters: buildAccountQueryFilters()
           }
     )
     const timestamp = formatExportTimestamp()
@@ -1660,103 +1297,10 @@ const handleExportData = async () => {
     showExportDataDialog.value = false
   }
 }
-
-const openQuickTestSetup = async (account: Account, intent: QuickTestIntent = 'run') => {
-  quickTestSetup.account = account
-  quickTestSetup.intent = intent
-  quickTestSetup.show = true
-  quickTestSetup.loading = true
-  quickTestSetup.options = []
-  quickTestSetup.selected = quickTestPreference.value?.id ?? ''
-  try {
-    const models = await adminAPI.accounts.getAvailableModels(account.id)
-    quickTestSetup.options = models.map((m: ClaudeModel) => ({
-      value: m.id,
-      label: m.display_name || m.id
-    }))
-    const hasSelection =
-      quickTestSetup.selected !== null &&
-      quickTestSetup.selected !== undefined &&
-      quickTestSetup.selected !== ''
-    if (
-      !hasSelection ||
-      !quickTestSetup.options.some((opt) => String(opt.value) === String(quickTestSetup.selected))
-    ) {
-      const fallback = quickTestSetup.options[0]?.value ?? ''
-      quickTestSetup.selected = fallback === null ? '' : fallback
-    }
-  } catch (error) {
-    console.error('Failed to load quick test models:', error)
-    quickTestSetup.options = []
-    appStore.showError(t('admin.accounts.quickTestLoadModelsFailed'))
-  } finally {
-    quickTestSetup.loading = false
-  }
-}
-
-const closeQuickTestSetup = () => {
-  quickTestSetup.show = false
-  quickTestSetup.account = null
-  quickTestSetup.options = []
-  quickTestSetup.selected = ''
-  quickTestSetup.loading = false
-  quickTestSetup.intent = 'run'
-}
-
-const launchQuickTest = (account: Account, modelId: string) => {
-  testingAcc.value = account
-  quickTestPresetModelId.value = modelId
-  quickTestAutoStart.value = true
-  showTest.value = true
-}
-
-const confirmQuickTestSetup = () => {
-  if (
-    quickTestSetup.selected === null ||
-    quickTestSetup.selected === undefined ||
-    quickTestSetup.selected === ''
-  ) {
-    appStore.showError(t('admin.accounts.quickTestSelectModelHint'))
-    return
-  }
-  const modelId = String(quickTestSetup.selected)
-  const selectedOption = quickTestSetup.options.find((opt) => String(opt.value) === modelId)
-  const pref: QuickTestPreference = {
-    id: modelId,
-    label: selectedOption?.label || modelId
-  }
-  quickTestPreference.value = pref
-  persistQuickTestPreference(pref)
-  appStore.showSuccess(t('admin.accounts.quickTestSaved', { model: pref.label }))
-  const shouldRun = quickTestSetup.intent === 'run' && quickTestSetup.account
-  const accountToTest = quickTestSetup.account
-  closeQuickTestSetup()
-  if (shouldRun && accountToTest) {
-    launchQuickTest(accountToTest, pref.id)
-  }
-}
-
-const resetQuickTestFlags = () => {
-  quickTestAutoStart.value = false
-  quickTestPresetModelId.value = null
-}
-
-const closeTestModal = () => {
-  showTest.value = false
-  testingAcc.value = null
-  resetQuickTestFlags()
-}
+const closeTestModal = () => { showTest.value = false; testingAcc.value = null }
 const closeStatsModal = () => { showStats.value = false; statsAcc.value = null }
 const closeReAuthModal = () => { showReAuth.value = false; reAuthAcc.value = null }
-const handleQuickTestClick = (account: Account) => {
-  if (!quickTestPreference.value) {
-    openQuickTestSetup(account, 'run')
-    return
-  }
-  launchQuickTest(account, quickTestPreference.value.id)
-}
 const handleTest = (a: Account) => { testingAcc.value = a; showTest.value = true }
-const handleQuickTestSettings = (a: Account) => { openQuickTestSetup(a, 'config') }
 const handleViewStats = (a: Account) => { statsAcc.value = a; showStats.value = true }
 const handleSchedule = async (a: Account) => {
   scheduleAcc.value = a
@@ -1801,14 +1345,15 @@ const handleResetQuota = async (a: Account) => {
     console.error('Failed to reset quota:', error)
   }
 }
-
-const handleQuickPresetMissing = () => {
-  const account = testingAcc.value
-  closeTestModal()
-  clearQuickTestPreference()
-  appStore.showError(t('admin.accounts.quickTestPresetMissing'))
-  if (account) {
-    openQuickTestSetup(account, 'run')
+const handleSetPrivacy = async (a: Account) => {
+  try {
+    const updated = await adminAPI.accounts.setPrivacy(a.id)
+    patchAccountInList(updated)
+    enterAutoRefreshSilentWindow()
+    appStore.showSuccess(t('common.success'))
+  } catch (error: any) {
+    console.error('Failed to set privacy:', error)
+    appStore.showError(error?.response?.data?.message || t('admin.accounts.privacyFailed'))
   }
 }
 const handleDelete = (a: Account) => { deletingAcc.value = a; showDeleteDialog.value = true }
@@ -1873,10 +1418,11 @@ const handleClickOutside = (event: MouseEvent) => {
 onMounted(async () => {
   load()
   try {
-    const [p] = await Promise.all([adminAPI.proxies.getAll()])
+    const [p, g] = await Promise.all([adminAPI.proxies.getAll(), adminAPI.groups.getAll()])
     proxies.value = p
+    groups.value = g
   } catch (error) {
-    console.error('Failed to load proxies:', error)
+    console.error('Failed to load proxies/groups:', error)
   }
   window.addEventListener('scroll', handleScroll, true)
   document.addEventListener('click', handleClickOutside)

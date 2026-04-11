@@ -45,31 +45,6 @@ func TestMigrationsRunner_IsIdempotent_AndSchemaIsUpToDate(t *testing.T) {
 	requireColumn(t, tx, "usage_logs", "request_type", "smallint", 0, false)
 	requireColumn(t, tx, "usage_logs", "openai_ws_mode", "boolean", 0, false)
 
-	// request_logs: metadata table for AI session visualization
-	var requestLogsRegclass sql.NullString
-	require.NoError(t, tx.QueryRowContext(context.Background(), "SELECT to_regclass('public.request_logs')").Scan(&requestLogsRegclass))
-	require.True(t, requestLogsRegclass.Valid, "expected request_logs table to exist")
-	requireColumn(t, tx, "request_logs", "user_id", "bigint", 0, false)
-	requireColumn(t, tx, "request_logs", "api_key_id", "bigint", 0, false)
-	requireColumn(t, tx, "request_logs", "request_id", "character varying", 64, true)
-	requireColumn(t, tx, "request_logs", "model", "character varying", 100, false)
-	requireColumn(t, tx, "request_logs", "status_code", "integer", 0, true)
-	requireColumn(t, tx, "request_logs", "stream", "boolean", 0, false)
-	requireColumn(t, tx, "request_logs", "created_at", "timestamp with time zone", 0, false)
-	requireIndex(t, tx, "request_logs", "idx_request_logs_user_id")
-	requireIndex(t, tx, "request_logs", "idx_request_logs_api_key_id")
-	requireIndex(t, tx, "request_logs", "idx_request_logs_user_created")
-
-	var requestLogPayloadsRegclass sql.NullString
-	require.NoError(t, tx.QueryRowContext(context.Background(), "SELECT to_regclass('public.request_log_payloads')").Scan(&requestLogPayloadsRegclass))
-	require.True(t, requestLogPayloadsRegclass.Valid, "expected request_log_payloads table to exist")
-	requireColumn(t, tx, "request_log_payloads", "request_log_id", "bigint", 0, false)
-	requireColumn(t, tx, "request_log_payloads", "request_body", "bytea", 0, true)
-	requireColumn(t, tx, "request_log_payloads", "response_body", "bytea", 0, true)
-	requireColumn(t, tx, "request_log_payloads", "created_at", "timestamp with time zone", 0, false)
-	requireIndex(t, tx, "request_log_payloads", "idx_request_log_payloads_request_log_id")
-	requireIndex(t, tx, "request_log_payloads", "idx_request_log_payloads_created_at")
-
 	// usage_billing_dedup: billing idempotency narrow table
 	var usageBillingDedupRegclass sql.NullString
 	require.NoError(t, tx.QueryRowContext(context.Background(), "SELECT to_regclass('public.usage_billing_dedup')").Scan(&usageBillingDedupRegclass))

@@ -36,8 +36,10 @@ export async function list(
     status?: string
     group?: string
     search?: string
-    schedulable?: string
+    privacy_mode?: string
     lite?: string
+    sort_by?: string
+    sort_order?: 'asc' | 'desc'
   },
   options?: {
     signal?: AbortSignal
@@ -69,8 +71,10 @@ export async function listWithEtag(
     status?: string
     group?: string
     search?: string
-    schedulable?: string
+    privacy_mode?: string
     lite?: string
+    sort_by?: string
+    sort_order?: 'asc' | 'desc'
   },
   options?: {
     signal?: AbortSignal
@@ -402,18 +406,6 @@ export interface BatchTodayStatsResponse {
   stats: Record<string, WindowStats>
 }
 
-export interface TodaySpendLeaderboardItem {
-  id: number
-  name: string
-  platform: string
-  cost: number
-  requests: number
-}
-
-export interface TodaySpendLeaderboardResponse {
-  items: TodaySpendLeaderboardItem[]
-}
-
 /**
  * 批量获取多个账号的今日统计
  * @param accountIds - 账号 ID 列表
@@ -422,19 +414,6 @@ export interface TodaySpendLeaderboardResponse {
 export async function getBatchTodayStats(accountIds: number[]): Promise<BatchTodayStatsResponse> {
   const { data } = await apiClient.post<BatchTodayStatsResponse>('/admin/accounts/today-stats/batch', {
     account_ids: accountIds
-  })
-  return data
-}
-
-/**
- * 获取全局今日账号消费榜（不受列表筛选/分页影响）
- * @param limit - 返回条数（默认 5）
- */
-export async function getTodaySpendLeaderboard(
-  limit: number = 5
-): Promise<TodaySpendLeaderboardResponse> {
-  const { data } = await apiClient.get<TodaySpendLeaderboardResponse>('/admin/accounts/today-stats/leaderboard', {
-    params: { limit }
   })
   return data
 }
@@ -525,8 +504,11 @@ export async function exportData(options?: {
     platform?: string
     type?: string
     status?: string
-    schedulable?: string
+    group?: string
+    privacy_mode?: string
     search?: string
+    sort_by?: string
+    sort_order?: 'asc' | 'desc'
   }
   includeProxies?: boolean
 }): Promise<AdminDataPayload> {
@@ -534,12 +516,15 @@ export async function exportData(options?: {
   if (options?.ids && options.ids.length > 0) {
     params.ids = options.ids.join(',')
   } else if (options?.filters) {
-    const { platform, type, status, search } = options.filters
+    const { platform, type, status, group, privacy_mode, search, sort_by, sort_order } = options.filters
     if (platform) params.platform = platform
     if (type) params.type = type
     if (status) params.status = status
-    if (options.filters.schedulable) params.schedulable = options.filters.schedulable
+    if (group) params.group = group
+    if (privacy_mode) params.privacy_mode = privacy_mode
     if (search) params.search = search
+    if (sort_by) params.sort_by = sort_by
+    if (sort_order) params.sort_order = sort_order
   }
   if (options?.includeProxies === false) {
     params.include_proxies = 'false'
@@ -579,35 +564,17 @@ export async function getAntigravityDefaultModelMapping(): Promise<Record<string
 export async function refreshOpenAIToken(
   refreshToken: string,
   proxyId?: number | null,
-  endpoint: string = '/admin/openai/refresh-token'
+  endpoint: string = '/admin/openai/refresh-token',
+  clientId?: string
 ): Promise<Record<string, unknown>> {
-  const payload: { refresh_token: string; proxy_id?: number } = {
+  const payload: { refresh_token: string; proxy_id?: number; client_id?: string } = {
     refresh_token: refreshToken
   }
   if (proxyId) {
     payload.proxy_id = proxyId
   }
-  const { data } = await apiClient.post<Record<string, unknown>>(endpoint, payload)
-  return data
-}
-
-/**
- * Validate Sora session token and exchange to access token
- * @param sessionToken - Sora session token
- * @param proxyId - Optional proxy ID
- * @param endpoint - API endpoint path
- * @returns Token information including access_token
- */
-export async function validateSoraSessionToken(
-  sessionToken: string,
-  proxyId?: number | null,
-  endpoint: string = '/admin/sora/st2at'
-): Promise<Record<string, unknown>> {
-  const payload: { session_token: string; proxy_id?: number } = {
-    session_token: sessionToken
-  }
-  if (proxyId) {
-    payload.proxy_id = proxyId
+  if (clientId) {
+    payload.client_id = clientId
   }
   const { data } = await apiClient.post<Record<string, unknown>>(endpoint, payload)
   return data
@@ -622,15 +589,6 @@ export interface BatchOperationResult {
   failed: number
   errors?: Array<{ account_id: number; error: string }>
   warnings?: Array<{ account_id: number; warning: string }>
-}
-
-export interface BatchTestResult extends BatchOperationResult {
-  results?: Array<{
-    account_id: number
-    success: boolean
-    error?: string
-    latency_ms?: number
-  }>
 }
 
 /**
@@ -660,24 +618,12 @@ export async function batchRefresh(accountIds: number[]): Promise<BatchOperation
 }
 
 /**
- * Batch test account connectivity
- * @param accountIds - Array of account IDs
- * @param modelId - Optional test model ID
- * @returns Batch operation result
+ * Set privacy for an Antigravity OAuth account
+ * @param id - Account ID
+ * @returns Updated account
  */
-export async function batchTest(accountIds: number[], modelId?: string): Promise<BatchTestResult> {
-  const payload: {
-    account_ids: number[]
-    model_id?: string
-  } = {
-    account_ids: accountIds
-  }
-  if (modelId) {
-    payload.model_id = modelId
-  }
-  const { data } = await apiClient.post<BatchTestResult>('/admin/accounts/batch-test', payload, {
-    timeout: 300000  // 300s timeout for batch test execution
-  })
+export async function setPrivacy(id: number): Promise<Account> {
+  const { data } = await apiClient.post<Account>(`/admin/accounts/${id}/set-privacy`)
   return data
 }
 
@@ -697,7 +643,6 @@ export const accountsAPI = {
   getUsage,
   getTodayStats,
   getBatchTodayStats,
-  getTodaySpendLeaderboard,
   clearRateLimit,
   recoverState,
   resetAccountQuota,
@@ -708,7 +653,6 @@ export const accountsAPI = {
   generateAuthUrl,
   exchangeCode,
   refreshOpenAIToken,
-  validateSoraSessionToken,
   batchCreate,
   batchUpdateCredentials,
   bulkUpdate,
@@ -719,7 +663,7 @@ export const accountsAPI = {
   getAntigravityDefaultModelMapping,
   batchClearError,
   batchRefresh,
-  batchTest
+  setPrivacy
 }
 
 export default accountsAPI

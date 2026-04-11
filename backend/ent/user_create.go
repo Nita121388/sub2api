@@ -14,9 +14,9 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
-	"github.com/Wei-Shaw/sub2api/ent/requestlog"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
@@ -211,34 +211,6 @@ func (_c *UserCreate) SetNillableTotpEnabledAt(v *time.Time) *UserCreate {
 	return _c
 }
 
-// SetSoraStorageQuotaBytes sets the "sora_storage_quota_bytes" field.
-func (_c *UserCreate) SetSoraStorageQuotaBytes(v int64) *UserCreate {
-	_c.mutation.SetSoraStorageQuotaBytes(v)
-	return _c
-}
-
-// SetNillableSoraStorageQuotaBytes sets the "sora_storage_quota_bytes" field if the given value is not nil.
-func (_c *UserCreate) SetNillableSoraStorageQuotaBytes(v *int64) *UserCreate {
-	if v != nil {
-		_c.SetSoraStorageQuotaBytes(*v)
-	}
-	return _c
-}
-
-// SetSoraStorageUsedBytes sets the "sora_storage_used_bytes" field.
-func (_c *UserCreate) SetSoraStorageUsedBytes(v int64) *UserCreate {
-	_c.mutation.SetSoraStorageUsedBytes(v)
-	return _c
-}
-
-// SetNillableSoraStorageUsedBytes sets the "sora_storage_used_bytes" field if the given value is not nil.
-func (_c *UserCreate) SetNillableSoraStorageUsedBytes(v *int64) *UserCreate {
-	if v != nil {
-		_c.SetSoraStorageUsedBytes(*v)
-	}
-	return _c
-}
-
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by IDs.
 func (_c *UserCreate) AddAPIKeyIDs(ids ...int64) *UserCreate {
 	_c.mutation.AddAPIKeyIDs(ids...)
@@ -344,21 +316,6 @@ func (_c *UserCreate) AddUsageLogs(v ...*UsageLog) *UserCreate {
 	return _c.AddUsageLogIDs(ids...)
 }
 
-// AddRequestLogIDs adds the "request_logs" edge to the RequestLog entity by IDs.
-func (_c *UserCreate) AddRequestLogIDs(ids ...int64) *UserCreate {
-	_c.mutation.AddRequestLogIDs(ids...)
-	return _c
-}
-
-// AddRequestLogs adds the "request_logs" edges to the RequestLog entity.
-func (_c *UserCreate) AddRequestLogs(v ...*RequestLog) *UserCreate {
-	ids := make([]int64, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _c.AddRequestLogIDs(ids...)
-}
-
 // AddAttributeValueIDs adds the "attribute_values" edge to the UserAttributeValue entity by IDs.
 func (_c *UserCreate) AddAttributeValueIDs(ids ...int64) *UserCreate {
 	_c.mutation.AddAttributeValueIDs(ids...)
@@ -387,6 +344,21 @@ func (_c *UserCreate) AddPromoCodeUsages(v ...*PromoCodeUsage) *UserCreate {
 		ids[i] = v[i].ID
 	}
 	return _c.AddPromoCodeUsageIDs(ids...)
+}
+
+// AddPaymentOrderIDs adds the "payment_orders" edge to the PaymentOrder entity by IDs.
+func (_c *UserCreate) AddPaymentOrderIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddPaymentOrderIDs(ids...)
+	return _c
+}
+
+// AddPaymentOrders adds the "payment_orders" edges to the PaymentOrder entity.
+func (_c *UserCreate) AddPaymentOrders(v ...*PaymentOrder) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddPaymentOrderIDs(ids...)
 }
 
 // Mutation returns the UserMutation object of the builder.
@@ -468,14 +440,6 @@ func (_c *UserCreate) defaults() error {
 		v := user.DefaultTotpEnabled
 		_c.mutation.SetTotpEnabled(v)
 	}
-	if _, ok := _c.mutation.SoraStorageQuotaBytes(); !ok {
-		v := user.DefaultSoraStorageQuotaBytes
-		_c.mutation.SetSoraStorageQuotaBytes(v)
-	}
-	if _, ok := _c.mutation.SoraStorageUsedBytes(); !ok {
-		v := user.DefaultSoraStorageUsedBytes
-		_c.mutation.SetSoraStorageUsedBytes(v)
-	}
 	return nil
 }
 
@@ -538,12 +502,6 @@ func (_c *UserCreate) check() error {
 	}
 	if _, ok := _c.mutation.TotpEnabled(); !ok {
 		return &ValidationError{Name: "totp_enabled", err: errors.New(`ent: missing required field "User.totp_enabled"`)}
-	}
-	if _, ok := _c.mutation.SoraStorageQuotaBytes(); !ok {
-		return &ValidationError{Name: "sora_storage_quota_bytes", err: errors.New(`ent: missing required field "User.sora_storage_quota_bytes"`)}
-	}
-	if _, ok := _c.mutation.SoraStorageUsedBytes(); !ok {
-		return &ValidationError{Name: "sora_storage_used_bytes", err: errors.New(`ent: missing required field "User.sora_storage_used_bytes"`)}
 	}
 	return nil
 }
@@ -627,14 +585,6 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.TotpEnabledAt(); ok {
 		_spec.SetField(user.FieldTotpEnabledAt, field.TypeTime, value)
 		_node.TotpEnabledAt = &value
-	}
-	if value, ok := _c.mutation.SoraStorageQuotaBytes(); ok {
-		_spec.SetField(user.FieldSoraStorageQuotaBytes, field.TypeInt64, value)
-		_node.SoraStorageQuotaBytes = value
-	}
-	if value, ok := _c.mutation.SoraStorageUsedBytes(); ok {
-		_spec.SetField(user.FieldSoraStorageUsedBytes, field.TypeInt64, value)
-		_node.SoraStorageUsedBytes = value
 	}
 	if nodes := _c.mutation.APIKeysIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -752,22 +702,6 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
-	if nodes := _c.mutation.RequestLogsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   user.RequestLogsTable,
-			Columns: []string{user.RequestLogsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(requestlog.FieldID, field.TypeInt64),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges = append(_spec.Edges, edge)
-	}
 	if nodes := _c.mutation.AttributeValuesIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
@@ -793,6 +727,22 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(promocodeusage.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.PaymentOrdersIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.PaymentOrdersTable,
+			Columns: []string{user.PaymentOrdersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(paymentorder.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -1035,42 +985,6 @@ func (u *UserUpsert) UpdateTotpEnabledAt() *UserUpsert {
 // ClearTotpEnabledAt clears the value of the "totp_enabled_at" field.
 func (u *UserUpsert) ClearTotpEnabledAt() *UserUpsert {
 	u.SetNull(user.FieldTotpEnabledAt)
-	return u
-}
-
-// SetSoraStorageQuotaBytes sets the "sora_storage_quota_bytes" field.
-func (u *UserUpsert) SetSoraStorageQuotaBytes(v int64) *UserUpsert {
-	u.Set(user.FieldSoraStorageQuotaBytes, v)
-	return u
-}
-
-// UpdateSoraStorageQuotaBytes sets the "sora_storage_quota_bytes" field to the value that was provided on create.
-func (u *UserUpsert) UpdateSoraStorageQuotaBytes() *UserUpsert {
-	u.SetExcluded(user.FieldSoraStorageQuotaBytes)
-	return u
-}
-
-// AddSoraStorageQuotaBytes adds v to the "sora_storage_quota_bytes" field.
-func (u *UserUpsert) AddSoraStorageQuotaBytes(v int64) *UserUpsert {
-	u.Add(user.FieldSoraStorageQuotaBytes, v)
-	return u
-}
-
-// SetSoraStorageUsedBytes sets the "sora_storage_used_bytes" field.
-func (u *UserUpsert) SetSoraStorageUsedBytes(v int64) *UserUpsert {
-	u.Set(user.FieldSoraStorageUsedBytes, v)
-	return u
-}
-
-// UpdateSoraStorageUsedBytes sets the "sora_storage_used_bytes" field to the value that was provided on create.
-func (u *UserUpsert) UpdateSoraStorageUsedBytes() *UserUpsert {
-	u.SetExcluded(user.FieldSoraStorageUsedBytes)
-	return u
-}
-
-// AddSoraStorageUsedBytes adds v to the "sora_storage_used_bytes" field.
-func (u *UserUpsert) AddSoraStorageUsedBytes(v int64) *UserUpsert {
-	u.Add(user.FieldSoraStorageUsedBytes, v)
 	return u
 }
 
@@ -1333,48 +1247,6 @@ func (u *UserUpsertOne) UpdateTotpEnabledAt() *UserUpsertOne {
 func (u *UserUpsertOne) ClearTotpEnabledAt() *UserUpsertOne {
 	return u.Update(func(s *UserUpsert) {
 		s.ClearTotpEnabledAt()
-	})
-}
-
-// SetSoraStorageQuotaBytes sets the "sora_storage_quota_bytes" field.
-func (u *UserUpsertOne) SetSoraStorageQuotaBytes(v int64) *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.SetSoraStorageQuotaBytes(v)
-	})
-}
-
-// AddSoraStorageQuotaBytes adds v to the "sora_storage_quota_bytes" field.
-func (u *UserUpsertOne) AddSoraStorageQuotaBytes(v int64) *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.AddSoraStorageQuotaBytes(v)
-	})
-}
-
-// UpdateSoraStorageQuotaBytes sets the "sora_storage_quota_bytes" field to the value that was provided on create.
-func (u *UserUpsertOne) UpdateSoraStorageQuotaBytes() *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.UpdateSoraStorageQuotaBytes()
-	})
-}
-
-// SetSoraStorageUsedBytes sets the "sora_storage_used_bytes" field.
-func (u *UserUpsertOne) SetSoraStorageUsedBytes(v int64) *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.SetSoraStorageUsedBytes(v)
-	})
-}
-
-// AddSoraStorageUsedBytes adds v to the "sora_storage_used_bytes" field.
-func (u *UserUpsertOne) AddSoraStorageUsedBytes(v int64) *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.AddSoraStorageUsedBytes(v)
-	})
-}
-
-// UpdateSoraStorageUsedBytes sets the "sora_storage_used_bytes" field to the value that was provided on create.
-func (u *UserUpsertOne) UpdateSoraStorageUsedBytes() *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.UpdateSoraStorageUsedBytes()
 	})
 }
 
@@ -1803,48 +1675,6 @@ func (u *UserUpsertBulk) UpdateTotpEnabledAt() *UserUpsertBulk {
 func (u *UserUpsertBulk) ClearTotpEnabledAt() *UserUpsertBulk {
 	return u.Update(func(s *UserUpsert) {
 		s.ClearTotpEnabledAt()
-	})
-}
-
-// SetSoraStorageQuotaBytes sets the "sora_storage_quota_bytes" field.
-func (u *UserUpsertBulk) SetSoraStorageQuotaBytes(v int64) *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.SetSoraStorageQuotaBytes(v)
-	})
-}
-
-// AddSoraStorageQuotaBytes adds v to the "sora_storage_quota_bytes" field.
-func (u *UserUpsertBulk) AddSoraStorageQuotaBytes(v int64) *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.AddSoraStorageQuotaBytes(v)
-	})
-}
-
-// UpdateSoraStorageQuotaBytes sets the "sora_storage_quota_bytes" field to the value that was provided on create.
-func (u *UserUpsertBulk) UpdateSoraStorageQuotaBytes() *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.UpdateSoraStorageQuotaBytes()
-	})
-}
-
-// SetSoraStorageUsedBytes sets the "sora_storage_used_bytes" field.
-func (u *UserUpsertBulk) SetSoraStorageUsedBytes(v int64) *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.SetSoraStorageUsedBytes(v)
-	})
-}
-
-// AddSoraStorageUsedBytes adds v to the "sora_storage_used_bytes" field.
-func (u *UserUpsertBulk) AddSoraStorageUsedBytes(v int64) *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.AddSoraStorageUsedBytes(v)
-	})
-}
-
-// UpdateSoraStorageUsedBytes sets the "sora_storage_used_bytes" field to the value that was provided on create.
-func (u *UserUpsertBulk) UpdateSoraStorageUsedBytes() *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.UpdateSoraStorageUsedBytes()
 	})
 }
 
