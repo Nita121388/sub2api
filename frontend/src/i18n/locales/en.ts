@@ -2012,6 +2012,7 @@ export default {
       allPlatforms: 'All Platforms',
       allTypes: 'All Types',
       allStatus: 'All Status',
+      allSchedulable: 'All Scheduling',
       allGroups: 'All Groups',
       ungroupedGroup: 'Ungrouped',
       oauthType: 'OAuth',
@@ -2035,7 +2036,7 @@ export default {
         groupsHint: 'Grouped totals; one account may be counted in multiple groups.',
         noGroupStats: 'No group account stats available.',
         spendTitle: 'Account Spending Leaderboard',
-        spendHint: 'Ranked by today spending for accounts on the current page. Updates with filters and pagination.',
+        spendHint: 'Ranked by today spending across all accounts. Independent from table filters and pagination.',
         topCount: 'TOP {count}',
         spendCollapse: 'Collapse leaderboard',
         spendExpand: 'Expand leaderboard',
@@ -2044,7 +2045,7 @@ export default {
         todaySpend: 'Today spend',
         loadingSpend: 'Loading spending data...',
         spendLoadFailed: 'Failed to load spending leaderboard. Refresh and try again.',
-        noSpendData: 'No spending data on the current page.'
+        noSpendData: 'No spending data for accounts today.'
       },
       platforms: {
         anthropic: 'Anthropic',

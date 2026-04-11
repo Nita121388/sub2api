@@ -36,6 +36,7 @@ export async function list(
     status?: string
     group?: string
     search?: string
+    schedulable?: string
     lite?: string
   },
   options?: {
@@ -68,6 +69,7 @@ export async function listWithEtag(
     status?: string
     group?: string
     search?: string
+    schedulable?: string
     lite?: string
   },
   options?: {
@@ -400,6 +402,18 @@ export interface BatchTodayStatsResponse {
   stats: Record<string, WindowStats>
 }
 
+export interface TodaySpendLeaderboardItem {
+  id: number
+  name: string
+  platform: string
+  cost: number
+  requests: number
+}
+
+export interface TodaySpendLeaderboardResponse {
+  items: TodaySpendLeaderboardItem[]
+}
+
 /**
  * 批量获取多个账号的今日统计
  * @param accountIds - 账号 ID 列表
@@ -408,6 +422,19 @@ export interface BatchTodayStatsResponse {
 export async function getBatchTodayStats(accountIds: number[]): Promise<BatchTodayStatsResponse> {
   const { data } = await apiClient.post<BatchTodayStatsResponse>('/admin/accounts/today-stats/batch', {
     account_ids: accountIds
+  })
+  return data
+}
+
+/**
+ * 获取全局今日账号消费榜（不受列表筛选/分页影响）
+ * @param limit - 返回条数（默认 5）
+ */
+export async function getTodaySpendLeaderboard(
+  limit: number = 5
+): Promise<TodaySpendLeaderboardResponse> {
+  const { data } = await apiClient.get<TodaySpendLeaderboardResponse>('/admin/accounts/today-stats/leaderboard', {
+    params: { limit }
   })
   return data
 }
@@ -498,6 +525,7 @@ export async function exportData(options?: {
     platform?: string
     type?: string
     status?: string
+    schedulable?: string
     search?: string
   }
   includeProxies?: boolean
@@ -510,6 +538,7 @@ export async function exportData(options?: {
     if (platform) params.platform = platform
     if (type) params.type = type
     if (status) params.status = status
+    if (options.filters.schedulable) params.schedulable = options.filters.schedulable
     if (search) params.search = search
   }
   if (options?.includeProxies === false) {
@@ -668,6 +697,7 @@ export const accountsAPI = {
   getUsage,
   getTodayStats,
   getBatchTodayStats,
+  getTodaySpendLeaderboard,
   clearRateLimit,
   recoverState,
   resetAccountQuota,

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -225,6 +226,11 @@ func (h *AccountHandler) List(c *gin.Context) {
 		search = search[:100]
 	}
 	lite := parseBoolQueryWithDefault(c.Query("lite"), false)
+	schedulable, schedulableFilter, schedulableParseErr := parseOptionalBoolFilter(c.Query("schedulable"))
+	if schedulableParseErr != nil {
+		response.ErrorFrom(c, infraerrors.BadRequest("INVALID_SCHEDULABLE_FILTER", "invalid schedulable filter"))
+		return
+	}
 
 	var groupID int64
 	if groupIDStr := c.Query("group"); groupIDStr != "" {
@@ -244,7 +250,7 @@ func (h *AccountHandler) List(c *gin.Context) {
 		}
 	}
 
-	accounts, total, err := h.adminService.ListAccounts(c.Request.Context(), page, pageSize, platform, accountType, status, search, groupID)
+	accounts, total, err := h.adminService.ListAccounts(c.Request.Context(), page, pageSize, platform, accountType, status, search, groupID, schedulable)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -366,7 +372,7 @@ func (h *AccountHandler) List(c *gin.Context) {
 		result[i] = item
 	}
 
-	etag := buildAccountsListETag(result, total, page, pageSize, platform, accountType, status, search, lite)
+	etag := buildAccountsListETag(result, total, page, pageSize, platform, accountType, status, search, schedulableFilter, lite)
 	if etag != "" {
 		c.Header("ETag", etag)
 		c.Header("Vary", "If-None-Match")
@@ -383,7 +389,7 @@ func buildAccountsListETag(
 	items []AccountWithConcurrency,
 	total int64,
 	page, pageSize int,
-	platform, accountType, status, search string,
+	platform, accountType, status, search, schedulable string,
 	lite bool,
 ) string {
 	payload := struct {
@@ -394,6 +400,7 @@ func buildAccountsListETag(
 		AccountType string                   `json:"type"`
 		Status      string                   `json:"status"`
 		Search      string                   `json:"search"`
+		Schedulable string                   `json:"schedulable"`
 		Lite        bool                     `json:"lite"`
 		Items       []AccountWithConcurrency `json:"items"`
 	}{
@@ -404,6 +411,7 @@ func buildAccountsListETag(
 		AccountType: accountType,
 		Status:      status,
 		Search:      search,
+		Schedulable: schedulable,
 		Lite:        lite,
 		Items:       items,
 	}
@@ -432,6 +440,22 @@ func ifNoneMatchMatched(ifNoneMatch, etag string) bool {
 		}
 	}
 	return false
+}
+
+func parseOptionalBoolFilter(raw string) (*bool, string, error) {
+	value := strings.TrimSpace(strings.ToLower(raw))
+	switch value {
+	case "":
+		return nil, "", nil
+	case "1", "true", "yes", "on":
+		v := true
+		return &v, "true", nil
+	case "0", "false", "no", "off":
+		v := false
+		return &v, "false", nil
+	default:
+		return nil, "", fmt.Errorf("invalid bool filter")
+	}
 }
 
 // GetByID handles getting an account by ID
@@ -1761,6 +1785,14 @@ type BatchTodayStatsRequest struct {
 	AccountIDs []int64 `json:"account_ids" binding:"required"`
 }
 
+type TodaySpendLeaderboardEntry struct {
+	ID       int64   `json:"id"`
+	Name     string  `json:"name"`
+	Platform string  `json:"platform"`
+	Cost     float64 `json:"cost"`
+	Requests int64   `json:"requests"`
+}
+
 // GetBatchTodayStats 批量获取多个账号的今日统计。
 // POST /api/v1/admin/accounts/today-stats/batch
 func (h *AccountHandler) GetBatchTodayStats(c *gin.Context) {
@@ -1805,6 +1837,106 @@ func (h *AccountHandler) GetBatchTodayStats(c *gin.Context) {
 	}
 	c.Header("X-Snapshot-Cache", "miss")
 	response.Success(c, payload)
+}
+
+// GetTodaySpendLeaderboard returns top spend accounts for today, independent from table filters/pagination.
+// GET /api/v1/admin/accounts/today-stats/leaderboard
+func (h *AccountHandler) GetTodaySpendLeaderboard(c *gin.Context) {
+	limit := 5
+	if raw := strings.TrimSpace(c.Query("limit")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed <= 0 {
+			response.BadRequest(c, "Invalid limit")
+			return
+		}
+		if parsed > 20 {
+			parsed = 20
+		}
+		limit = parsed
+	}
+
+	cacheKey := buildAccountTodaySpendLeaderboardCacheKey(limit)
+	cached, hit, err := accountTodaySpendLeaderboardCache.GetOrLoad(cacheKey, func() (any, error) {
+		accounts := make([]service.Account, 0)
+		const pageSize = 1000
+		for page := 1; ; page++ {
+			batch, total, listErr := h.adminService.ListAccounts(c.Request.Context(), page, pageSize, "", "", "", "", 0, nil)
+			if listErr != nil {
+				return nil, listErr
+			}
+			if len(batch) == 0 {
+				break
+			}
+			accounts = append(accounts, batch...)
+			if int64(len(accounts)) >= total {
+				break
+			}
+		}
+
+		if len(accounts) == 0 {
+			return gin.H{"items": []TodaySpendLeaderboardEntry{}}, nil
+		}
+
+		accountIDs := make([]int64, 0, len(accounts))
+		for i := range accounts {
+			accountIDs = append(accountIDs, accounts[i].ID)
+		}
+
+		statsByAccountID, statsErr := h.accountUsageService.GetTodayStatsBatch(c.Request.Context(), accountIDs)
+		if statsErr != nil {
+			return nil, statsErr
+		}
+
+		items := make([]TodaySpendLeaderboardEntry, 0, len(accounts))
+		for i := range accounts {
+			acc := accounts[i]
+			stats := statsByAccountID[acc.ID]
+			entry := TodaySpendLeaderboardEntry{
+				ID:       acc.ID,
+				Name:     acc.Name,
+				Platform: string(acc.Platform),
+			}
+			if stats != nil {
+				entry.Cost = stats.Cost
+				entry.Requests = stats.Requests
+			}
+			items = append(items, entry)
+		}
+
+		sort.Slice(items, func(i, j int) bool {
+			if items[i].Cost != items[j].Cost {
+				return items[i].Cost > items[j].Cost
+			}
+			if items[i].Requests != items[j].Requests {
+				return items[i].Requests > items[j].Requests
+			}
+			return items[i].Name < items[j].Name
+		})
+
+		if len(items) > limit {
+			items = items[:limit]
+		}
+		return gin.H{"items": items}, nil
+	})
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	if cached.ETag != "" {
+		c.Header("ETag", cached.ETag)
+		c.Header("Vary", "If-None-Match")
+		if ifNoneMatchMatched(c.GetHeader("If-None-Match"), cached.ETag) {
+			c.Status(http.StatusNotModified)
+			return
+		}
+	}
+	if hit {
+		c.Header("X-Snapshot-Cache", "hit")
+	} else {
+		c.Header("X-Snapshot-Cache", "miss")
+	}
+	response.Success(c, cached.Payload)
 }
 
 // SetSchedulableRequest represents the request body for setting schedulable status
@@ -2049,7 +2181,7 @@ func (h *AccountHandler) BatchRefreshTier(c *gin.Context) {
 	accounts := make([]*service.Account, 0)
 
 	if len(req.AccountIDs) == 0 {
-		allAccounts, _, err := h.adminService.ListAccounts(ctx, 1, 10000, "gemini", "oauth", "", "", 0)
+		allAccounts, _, err := h.adminService.ListAccounts(ctx, 1, 10000, "gemini", "oauth", "", "", 0, nil)
 		if err != nil {
 			response.ErrorFrom(c, err)
 			return

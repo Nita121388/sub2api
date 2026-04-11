@@ -116,14 +116,14 @@
             </div>
 
             <div
-              v-if="todayStatsLoading && accountSpendLeaderboard.length === 0"
+              v-if="accountSpendLoading && accountSpendLeaderboard.length === 0"
               class="rounded-xl border border-dashed border-gray-200 px-4 py-6 text-sm text-gray-500 dark:border-dark-700 dark:text-gray-400"
             >
               {{ t('admin.accounts.overview.loadingSpend') }}
             </div>
 
             <div
-              v-else-if="todayStatsError"
+              v-else-if="accountSpendError"
               class="rounded-xl border border-dashed border-rose-200 px-4 py-6 text-sm text-rose-600 dark:border-rose-900/40 dark:text-rose-300"
             >
               {{ t('admin.accounts.overview.spendLoadFailed') }}
@@ -718,6 +718,17 @@ const todayStatsLoading = ref(false)
 const todayStatsError = ref<string | null>(null)
 const todayStatsReqSeq = ref(0)
 const pendingTodayStatsRefresh = ref(false)
+const accountSpendLeaderboard = ref<Array<{
+  id: number
+  name: string
+  platform: string
+  cost: number
+  requests: number
+}>>([])
+const accountSpendLoading = ref(false)
+const accountSpendError = ref<string | null>(null)
+const accountSpendReqSeq = ref(0)
+const accountSpendLeaderboardLimit = 5
 const usageManualRefreshToken = ref(0)
 
 const accountStatusCards = computed(() => {
@@ -776,27 +787,26 @@ const accountGroupCards = computed(() =>
     }))
 )
 
-const accountSpendLeaderboard = computed(() =>
-  [...accounts.value]
-    .map((account) => {
-      const stats = todayStatsByAccountId.value[String(account.id)] ?? buildDefaultTodayStats()
-      return {
-        id: account.id,
-        name: account.name,
-        platform: account.platform,
-        cost: stats.cost ?? 0,
-        requests: stats.requests ?? 0
-      }
-    })
-    .sort((a, b) => {
-      const costDiff = b.cost - a.cost
-      if (costDiff !== 0) return costDiff
-      const requestDiff = b.requests - a.requests
-      if (requestDiff !== 0) return requestDiff
-      return a.name.localeCompare(b.name)
-    })
-    .slice(0, 5)
-)
+const refreshAccountSpendLeaderboard = async () => {
+  const reqSeq = ++accountSpendReqSeq.value
+  accountSpendLoading.value = true
+  accountSpendError.value = null
+
+  try {
+    const result = await adminAPI.accounts.getTodaySpendLeaderboard(accountSpendLeaderboardLimit)
+    if (reqSeq !== accountSpendReqSeq.value) return
+    accountSpendLeaderboard.value = Array.isArray(result.items) ? result.items : []
+  } catch (error) {
+    if (reqSeq !== accountSpendReqSeq.value) return
+    accountSpendError.value = 'Failed'
+    accountSpendLeaderboard.value = []
+    console.error('Failed to load account spend leaderboard:', error)
+  } finally {
+    if (reqSeq === accountSpendReqSeq.value) {
+      accountSpendLoading.value = false
+    }
+  }
+}
 
 const hasAccountSpendData = computed(() =>
   accountSpendLeaderboard.value.some((entry) => entry.cost > 0 || entry.requests > 0)
@@ -975,7 +985,7 @@ const {
   handlePageSizeChange: baseHandlePageSizeChange
 } = useTableLoader<Account, any>({
   fetchFn: adminAPI.accounts.list,
-  initialParams: { platform: '', type: '', status: '', group: '', search: '' }
+  initialParams: { platform: '', type: '', status: '', schedulable: '', group: '', search: '' }
 })
 
 const {
@@ -1033,8 +1043,11 @@ const load = async () => {
     isFirstLoad.value = false
     delete requestParams.lite
   }
-  await refreshTodayStatsBatch()
-  await refreshOverviewData()
+  await Promise.all([
+    refreshTodayStatsBatch(),
+    refreshOverviewData(),
+    refreshAccountSpendLeaderboard()
+  ])
 }
 
 const reload = async () => {
@@ -1042,8 +1055,11 @@ const reload = async () => {
   resetAutoRefreshCache()
   pendingTodayStatsRefresh.value = false
   await baseReload()
-  await refreshTodayStatsBatch()
-  await refreshOverviewData()
+  await Promise.all([
+    refreshTodayStatsBatch(),
+    refreshOverviewData(),
+    refreshAccountSpendLeaderboard()
+  ])
 }
 
 const debouncedReload = () => {
@@ -1167,6 +1183,7 @@ const refreshAccountsIncrementally = async () => {
         platform?: string
         type?: string
         status?: string
+        schedulable?: string
         group?: string
         search?: string
 
@@ -1184,7 +1201,10 @@ const refreshAccountsIncrementally = async () => {
       hasPendingListSync.value = false
     }
 
-    await refreshTodayStatsBatch()
+    await Promise.all([
+      refreshTodayStatsBatch(),
+      refreshAccountSpendLeaderboard()
+    ])
   } catch (error) {
     console.error('Auto refresh failed:', error)
   } finally {
@@ -1546,6 +1566,8 @@ const accountMatchesCurrentFilters = (account: Account) => {
       return false
     }
   }
+  if (params.schedulable === 'true' && !account.schedulable) return false
+  if (params.schedulable === 'false' && account.schedulable) return false
   const search = String(params.search || '').trim().toLowerCase()
   if (search && !account.name.toLowerCase().includes(search)) return false
   return true
@@ -1616,6 +1638,7 @@ const handleExportData = async () => {
               platform: params.platform,
               type: params.type,
               status: params.status,
+              schedulable: params.schedulable,
               search: params.search
             }
           }

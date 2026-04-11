@@ -2094,6 +2094,7 @@ export default {
       allPlatforms: '全部平台',
       allTypes: '全部类型',
       allStatus: '全部状态',
+      allSchedulable: '全部调度状态',
       allGroups: '全部分组',
       ungroupedGroup: '未分配分组',
       oauthType: 'OAuth',
@@ -2115,7 +2116,7 @@ export default {
         groupsHint: '按分组统计；同一账号属于多个分组时会重复计入。',
         noGroupStats: '暂无分组统计数据。',
         spendTitle: '账号消费榜',
-        spendHint: '按当前页账号的今日消费排行，会随筛选和分页变化。',
+        spendHint: '按全量账号的今日消费排行，不受筛选和分页影响。',
         topCount: 'TOP {count}',
         spendCollapse: '收起消费榜',
         spendExpand: '展开消费榜',
@@ -2124,7 +2125,7 @@ export default {
         todaySpend: '今日消费',
         loadingSpend: '正在加载消费数据...',
         spendLoadFailed: '消费榜加载失败，请稍后刷新重试。',
-        noSpendData: '当前页暂无消费数据。'
+        noSpendData: '今日暂无消费数据。'
       },
       columns: {
         name: '名称',
