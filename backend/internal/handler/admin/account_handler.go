@@ -149,6 +149,16 @@ type BulkUpdateAccountsRequest struct {
 	ConfirmMixedChannelRisk *bool          `json:"confirm_mixed_channel_risk"` // 用户确认混合渠道风险
 }
 
+// AppendAccountModelMappingsRequest represents append-only model_mapping updates.
+type AppendAccountModelMappingsRequest struct {
+	Platform                string            `json:"platform"`
+	AccountIDs              []int64           `json:"account_ids"`
+	Mappings                map[string]string `json:"mappings" binding:"required"`
+	DryRun                  bool              `json:"dry_run"`
+	OverwriteExisting       bool              `json:"overwrite_existing"`
+	OnlyWithExistingMapping *bool             `json:"only_with_existing_mapping"`
+}
+
 // CheckMixedChannelRequest represents check mixed channel risk request
 type CheckMixedChannelRequest struct {
 	Platform  string  `json:"platform" binding:"required"`
@@ -1415,6 +1425,36 @@ func (h *AccountHandler) BulkUpdate(c *gin.Context) {
 			})
 			return
 		}
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, result)
+}
+
+// AppendModelMappings appends model_mapping entries to selected or platform accounts.
+// POST /api/v1/admin/accounts/model-mapping/append
+func (h *AccountHandler) AppendModelMappings(c *gin.Context) {
+	var req AppendAccountModelMappingsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	onlyWithExistingMapping := true
+	if req.OnlyWithExistingMapping != nil {
+		onlyWithExistingMapping = *req.OnlyWithExistingMapping
+	}
+
+	result, err := h.adminService.AppendAccountModelMappings(c.Request.Context(), &service.AppendAccountModelMappingsInput{
+		Platform:                req.Platform,
+		AccountIDs:              req.AccountIDs,
+		Mappings:                req.Mappings,
+		DryRun:                  req.DryRun,
+		OverwriteExisting:       req.OverwriteExisting,
+		OnlyWithExistingMapping: onlyWithExistingMapping,
+	})
+	if err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}

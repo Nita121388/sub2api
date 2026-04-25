@@ -392,6 +392,52 @@ export async function bulkUpdate(
   return data
 }
 
+export interface AppendModelMappingsRequest {
+  platform?: string
+  account_ids?: number[]
+  mappings: Record<string, string>
+  dry_run?: boolean
+  overwrite_existing?: boolean
+  only_with_existing_mapping?: boolean
+}
+
+export interface AppendModelMappingConflict {
+  model: string
+  existing: string
+  requested: string
+}
+
+export interface AppendModelMappingAccountResult {
+  account_id: number
+  account_name?: string
+  platform?: string
+  status?: string
+  action: 'changed' | 'skipped' | 'conflict' | 'unchanged'
+  reason?: string
+  existing_count: number
+  final_count: number
+  added?: Record<string, string>
+  overwritten?: Record<string, string>
+  conflicts?: AppendModelMappingConflict[]
+}
+
+export interface AppendModelMappingsResult {
+  dry_run: boolean
+  platform: string
+  total: number
+  changed: number
+  skipped: number
+  conflicted: number
+  results: AppendModelMappingAccountResult[]
+}
+
+export async function appendModelMappings(
+  request: AppendModelMappingsRequest
+): Promise<AppendModelMappingsResult> {
+  const { data } = await apiClient.post<AppendModelMappingsResult>('/admin/accounts/model-mapping/append', request)
+  return data
+}
+
 /**
  * Get account today statistics
  * @param id - Account ID
@@ -656,6 +702,7 @@ export const accountsAPI = {
   batchCreate,
   batchUpdateCredentials,
   bulkUpdate,
+  appendModelMappings,
   previewFromCrs,
   syncFromCrs,
   exportData,
