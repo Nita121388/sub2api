@@ -1762,6 +1762,9 @@ const executeCcsImport = (row: ApiKey, clientType: 'claude' | 'gemini') => {
     usageScript: btoa(usageScript),
     usageAutoInterval: '30'
   })
+  if (platform === 'openai') {
+    params.set('model', 'gpt-5.5')
+  }
   const deeplink = `ccswitch://v1/import?${params.toString()}`
 
   try {

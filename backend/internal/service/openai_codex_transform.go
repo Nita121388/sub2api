@@ -6,6 +6,19 @@ import (
 )
 
 var codexModelMap = map[string]string{
+	"gpt-5.5":                    "gpt-5.5",
+	"gpt-5.5-pro":                "gpt-5.5-pro",
+	"gpt-5.5-none":               "gpt-5.5",
+	"gpt-5.5-low":                "gpt-5.5",
+	"gpt-5.5-medium":             "gpt-5.5",
+	"gpt-5.5-high":               "gpt-5.5",
+	"gpt-5.5-xhigh":              "gpt-5.5",
+	"gpt-5.5-chat-latest":        "gpt-5.5",
+	"gpt-5.5-pro-none":           "gpt-5.5-pro",
+	"gpt-5.5-pro-low":            "gpt-5.5-pro",
+	"gpt-5.5-pro-medium":         "gpt-5.5-pro",
+	"gpt-5.5-pro-high":           "gpt-5.5-pro",
+	"gpt-5.5-pro-xhigh":          "gpt-5.5-pro",
 	"gpt-5.4":                    "gpt-5.4",
 	"gpt-5.4-mini":               "gpt-5.4-mini",
 	"gpt-5.4-nano":               "gpt-5.4-nano",
@@ -227,6 +240,9 @@ func normalizeCodexModel(model string) string {
 
 	normalized := strings.ToLower(modelID)
 
+	if mapped, ok := normalizeNewerGPT5Model(normalized); ok {
+		return mapped
+	}
 	if strings.Contains(normalized, "gpt-5.4-mini") || strings.Contains(normalized, "gpt 5.4 mini") {
 		return "gpt-5.4-mini"
 	}
@@ -273,6 +289,41 @@ func normalizeCodexModel(model string) string {
 	}
 
 	return "gpt-5.1"
+}
+
+func normalizeNewerGPT5Model(model string) (string, bool) {
+	tokens := strings.FieldsFunc(strings.ToLower(strings.TrimSpace(model)), func(r rune) bool {
+		switch r {
+		case '-', '_', ' ':
+			return true
+		default:
+			return false
+		}
+	})
+	if len(tokens) < 2 || tokens[0] != "gpt" {
+		return "", false
+	}
+
+	var major, minor int
+	n, _ := fmt.Sscanf(tokens[1], "%d.%d", &major, &minor)
+	if n != 2 || major != 5 || minor < 5 {
+		return "", false
+	}
+
+	end := len(tokens)
+	if end > 2 {
+		switch tokens[end-1] {
+		case "none", "minimal", "low", "medium", "high", "xhigh", "extrahigh":
+			end--
+		}
+	}
+	if end >= 4 && tokens[end-2] == "chat" && tokens[end-1] == "latest" {
+		end -= 2
+	}
+	if end < 2 {
+		return "", false
+	}
+	return "gpt-" + strings.Join(tokens[1:end], "-"), true
 }
 
 func normalizeOpenAIModelForUpstream(account *Account, model string) string {
