@@ -4681,6 +4681,10 @@ export default {
         apiBaseUrl: 'API 端点地址',
         apiBaseUrlHint: '用于"使用密钥"和"导入到 CC Switch"功能，留空则使用当前站点地址',
         apiBaseUrlPlaceholder: 'https://api.example.com',
+        ccsDefaultOpenAIModel: 'CCS 默认 OpenAI 模型',
+        ccsDefaultOpenAIModelPlaceholder: 'gpt-5.5',
+        ccsDefaultOpenAIModelHint:
+          '导入 OpenAI 密钥到 CCS 时写入 model 参数。除非希望新导入默认使用其他模型，否则保持 gpt-5.5。',
         tablePreferencesTitle: '通用表格设置',
         tablePreferencesDescription: '设置后台与用户侧表格组件的默认分页行为',
         tableDefaultPageSize: '默认每页条数',

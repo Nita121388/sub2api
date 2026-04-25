@@ -1788,6 +1788,22 @@
               </p>
             </div>
 
+            <!-- CCS Default OpenAI Model -->
+            <div>
+              <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                {{ t('admin.settings.site.ccsDefaultOpenAIModel') }}
+              </label>
+              <input
+                v-model="form.ccs_default_openai_model"
+                type="text"
+                class="input font-mono text-sm"
+                :placeholder="t('admin.settings.site.ccsDefaultOpenAIModelPlaceholder')"
+              />
+              <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                {{ t('admin.settings.site.ccsDefaultOpenAIModelHint') }}
+              </p>
+            </div>
+
             <!-- Global Table Preferences -->
             <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
               <h3 class="text-sm font-medium text-gray-900 dark:text-white">
@@ -2659,6 +2675,7 @@ const form = reactive<SettingsForm>({
   home_content: '',
   backend_mode_enabled: false,
   hide_ccs_import_button: false,
+  ccs_default_openai_model: 'gpt-5.5',
   payment_enabled: false,  payment_min_amount: 1,  payment_max_amount: 10000,  payment_daily_limit: 50000,  payment_max_pending_orders: 3,  payment_order_timeout_minutes: 30,  payment_balance_disabled: false,  payment_enabled_types: [],  payment_help_image_url: '',  payment_help_text: '',  payment_product_name_prefix: '',  payment_product_name_suffix: '',  payment_load_balance_strategy: 'round-robin',  payment_cancel_rate_limit_enabled: false,  payment_cancel_rate_limit_max: 10,  payment_cancel_rate_limit_window: 1,  payment_cancel_rate_limit_unit: 'day',  payment_cancel_rate_limit_window_mode: 'rolling',
   table_default_page_size: tablePageSizeDefault,
   table_page_size_options: [10, 20, 50, 100],
@@ -3075,6 +3092,7 @@ async function saveSettings() {
       home_content: form.home_content,
       backend_mode_enabled: form.backend_mode_enabled,
       hide_ccs_import_button: form.hide_ccs_import_button,
+      ccs_default_openai_model: form.ccs_default_openai_model?.trim() || 'gpt-5.5',
       table_default_page_size: form.table_default_page_size,
       table_page_size_options: form.table_page_size_options,
       custom_menu_items: form.custom_menu_items,

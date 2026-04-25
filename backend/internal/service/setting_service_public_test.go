@@ -66,7 +66,7 @@ func TestSettingService_GetPublicSettings_ExposesRegistrationEmailSuffixWhitelis
 func TestSettingService_GetPublicSettings_ExposesTablePreferences(t *testing.T) {
 	repo := &settingPublicRepoStub{
 		values: map[string]string{
-			SettingKeyTableDefaultPageSize:  "50",
+			SettingKeyTableDefaultPageSize: "50",
 			SettingKeyTablePageSizeOptions: "[20,50,100]",
 		},
 	}
@@ -76,4 +76,26 @@ func TestSettingService_GetPublicSettings_ExposesTablePreferences(t *testing.T) 
 	require.NoError(t, err)
 	require.Equal(t, 50, settings.TableDefaultPageSize)
 	require.Equal(t, []int{20, 50, 100}, settings.TablePageSizeOptions)
+}
+
+func TestSettingService_GetPublicSettings_ExposesCcsDefaultOpenAIModel(t *testing.T) {
+	repo := &settingPublicRepoStub{
+		values: map[string]string{
+			SettingKeyCcsDefaultOpenAIModel: "gpt-5.5-pro",
+		},
+	}
+	svc := NewSettingService(repo, &config.Config{})
+
+	settings, err := svc.GetPublicSettings(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, "gpt-5.5-pro", settings.CcsDefaultOpenAIModel)
+}
+
+func TestSettingService_GetPublicSettings_DefaultsCcsDefaultOpenAIModel(t *testing.T) {
+	repo := &settingPublicRepoStub{values: map[string]string{}}
+	svc := NewSettingService(repo, &config.Config{})
+
+	settings, err := svc.GetPublicSettings(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, "gpt-5.5", settings.CcsDefaultOpenAIModel)
 }

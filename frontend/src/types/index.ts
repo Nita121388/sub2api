@@ -104,6 +104,7 @@ export interface PublicSettings {
   doc_url: string
   home_content: string
   hide_ccs_import_button: boolean
+  ccs_default_openai_model: string
   payment_enabled: boolean
   table_default_page_size: number
   table_page_size_options: number[]

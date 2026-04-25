@@ -4520,6 +4520,10 @@ export default {
         apiBaseUrlPlaceholder: 'https://api.example.com',
         apiBaseUrlHint:
           'Used for "Use Key" and "Import to CC Switch" features. Leave empty to use current site URL.',
+        ccsDefaultOpenAIModel: 'CCS Default OpenAI Model',
+        ccsDefaultOpenAIModelPlaceholder: 'gpt-5.5',
+        ccsDefaultOpenAIModelHint:
+          'Used as the model parameter when importing OpenAI keys into CCS. Leave as gpt-5.5 unless you want new imports to default to another model.',
         tablePreferencesTitle: 'Global Table Preferences',
         tablePreferencesDescription: 'Configure default pagination behavior for shared table components',
         tableDefaultPageSize: 'Default Rows Per Page',
